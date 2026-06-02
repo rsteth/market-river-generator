@@ -1,0 +1,8 @@
+A cinematic elevated view of a fictional city cut by a wide river, same camera angle every day, architectural forms between Vancouver, Rotterdam, and an imagined financial district.
+
+The river is {river_speed}, {river_depth}, with a {river_surface} surface. The water is {river_color}. The city lighting is {city_lighting}, with a mood of {city_mood}. The market mood is translated visually, not literally.
+
+Style: atmospheric editorial concept art, painterly but architectural, coherent city layout, dramatic natural light, rich material detail.
+
+Avoid: text, numbers, logos, stock charts, candlesticks, tickers, people in foreground.
+
