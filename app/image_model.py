@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import html
+import mimetypes
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from app.config import Settings
 from app.prompts import PromptResult
 
 
@@ -85,17 +87,105 @@ class FutureImageProvider:
         )
 
 
-def get_image_provider(name: str) -> ImageProvider:
+class FalImageProvider:
+    name = "fal"
+
+    def __init__(self, settings: Settings):
+        self.model = settings.fal_model
+        self.image_size = settings.fal_image_size
+        self.output_format = settings.fal_output_format
+        self.num_inference_steps = settings.fal_num_inference_steps
+        self.acceleration = settings.fal_acceleration
+        self.enable_safety_checker = settings.fal_enable_safety_checker
+
+    def generate_image(
+        self,
+        prompt_result: PromptResult,
+        run_id: str,
+        output_dir: Path,
+        slot: str,
+        market_mood: str,
+        volatility_mood: str,
+    ) -> GeneratedImage:
+        import fal_client
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        result = fal_client.subscribe(
+            self.model,
+            arguments={
+                "prompt": _fal_prompt(prompt_result),
+                "image_size": self.image_size,
+                "num_inference_steps": self.num_inference_steps,
+                "num_images": 1,
+                "enable_safety_checker": self.enable_safety_checker,
+                "output_format": self.output_format,
+                "acceleration": self.acceleration,
+            },
+        )
+        image = _first_fal_image(result)
+        url = image["url"]
+        content_type = image.get("content_type") or _content_type_for_format(self.output_format)
+        image_format = _format_for_content_type(content_type, self.output_format)
+        path = output_dir / f"{slot}-{run_id}.{image_format}"
+        _download_image(url, path)
+        return GeneratedImage(provider=self.name, path=path, content_type=content_type, format=image_format)
+
+
+def get_image_provider(settings: Settings) -> ImageProvider:
+    name = settings.image_provider
     providers: dict[str, ImageProvider] = {
         "mock": MockImageProvider(),
         "none": NoneImageProvider(),
         "future": FutureImageProvider(),
+        "fal": FalImageProvider(settings),
     }
     try:
         return providers[name]
     except KeyError as exc:
         valid = ", ".join(sorted(providers))
         raise ValueError(f"IMAGE_PROVIDER must be one of: {valid}") from exc
+
+
+def _fal_prompt(prompt_result: PromptResult) -> str:
+    return (
+        f"{prompt_result.positive_prompt}\n\n"
+        f"Avoid: {prompt_result.negative_prompt}."
+    )
+
+
+def _first_fal_image(result: object) -> dict[str, str]:
+    if not isinstance(result, dict):
+        raise ValueError("fal response must be a JSON object")
+    images = result.get("images")
+    if not isinstance(images, list) or not images:
+        raise ValueError("fal response did not include any images")
+    image = images[0]
+    if not isinstance(image, dict) or not isinstance(image.get("url"), str):
+        raise ValueError("fal response image did not include a URL")
+    return image
+
+
+def _download_image(url: str, path: Path) -> None:
+    import requests
+
+    with requests.get(url, timeout=120) as response:
+        response.raise_for_status()
+        path.write_bytes(response.content)
+
+
+def _content_type_for_format(output_format: str) -> str:
+    if output_format == "png":
+        return "image/png"
+    return "image/jpeg"
+
+
+def _format_for_content_type(content_type: str, fallback: str) -> str:
+    extension = mimetypes.guess_extension(content_type.split(";")[0].strip())
+    if extension:
+        return extension.lstrip(".").replace("jpe", "jpg")
+    if fallback == "png":
+        return "png"
+    return "jpg"
 
 
 def _wrap(text: str, width: int, max_lines: int) -> list[str]:
@@ -140,4 +230,3 @@ def _placeholder_svg(slot: str, market_mood: str, volatility_mood: str, excerpt:
   {text_lines}
 </svg>
 """
-

@@ -47,8 +47,38 @@ resource "aws_ecs_task_definition" "app" {
           value = var.image_provider
         },
         {
+          name  = "FAL_MODEL"
+          value = var.fal_model
+        },
+        {
+          name  = "FAL_IMAGE_SIZE"
+          value = var.fal_image_size
+        },
+        {
+          name  = "FAL_OUTPUT_FORMAT"
+          value = var.fal_output_format
+        },
+        {
+          name  = "FAL_NUM_INFERENCE_STEPS"
+          value = tostring(var.fal_num_inference_steps)
+        },
+        {
+          name  = "FAL_ACCELERATION"
+          value = var.fal_acceleration
+        },
+        {
+          name  = "FAL_ENABLE_SAFETY_CHECKER"
+          value = tostring(var.fal_enable_safety_checker)
+        },
+        {
           name  = "LOG_LEVEL"
           value = "INFO"
+        },
+      ]
+      secrets = var.fal_key_ssm_parameter_arn == "" ? [] : [
+        {
+          name      = "FAL_KEY"
+          valueFrom = var.fal_key_ssm_parameter_arn
         },
       ]
       logConfiguration = {
@@ -64,4 +94,3 @@ resource "aws_ecs_task_definition" "app" {
 
   tags = local.common_tags
 }
-

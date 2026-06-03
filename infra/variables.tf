@@ -23,9 +23,51 @@ variable "image_tag" {
 }
 
 variable "image_provider" {
-  description = "Image provider selected by the application. Use mock or none for the MVP."
+  description = "Image provider selected by the application. Use mock, none, future, or fal."
   type        = string
   default     = "mock"
+}
+
+variable "fal_key_ssm_parameter_arn" {
+  description = "Optional ARN of a SecureString SSM parameter containing FAL_KEY for ECS tasks."
+  type        = string
+  default     = ""
+}
+
+variable "fal_model" {
+  description = "fal.ai model endpoint ID used when image_provider is fal."
+  type        = string
+  default     = "fal-ai/flux/schnell"
+}
+
+variable "fal_image_size" {
+  description = "fal.ai image size preset used when image_provider is fal."
+  type        = string
+  default     = "landscape_4_3"
+}
+
+variable "fal_output_format" {
+  description = "fal.ai output image format used when image_provider is fal."
+  type        = string
+  default     = "jpeg"
+}
+
+variable "fal_num_inference_steps" {
+  description = "fal.ai inference step count used when image_provider is fal."
+  type        = number
+  default     = 4
+}
+
+variable "fal_acceleration" {
+  description = "fal.ai acceleration setting used when image_provider is fal."
+  type        = string
+  default     = "none"
+}
+
+variable "fal_enable_safety_checker" {
+  description = "Enable fal.ai safety checker when image_provider is fal."
+  type        = bool
+  default     = true
 }
 
 variable "public_base_url" {
@@ -81,4 +123,3 @@ variable "public_subnet_cidrs" {
   type        = list(string)
   default     = ["10.42.1.0/24", "10.42.2.0/24"]
 }
-

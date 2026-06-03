@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from dotenv import load_dotenv
+
 from app.config import Settings, VALID_SLOTS, resolve_slot
 from app.image_model import get_image_provider
 from app.logging_utils import configure_logging, get_logger
@@ -20,6 +22,7 @@ logger = get_logger(__name__)
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    load_dotenv()
     settings = Settings.from_env()
     configure_logging(settings.log_level)
 
@@ -34,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         market_snapshot = fetch_market_snapshot()
         visual_state = derive_visual_state(market_snapshot)
         prompt = compose_prompt(visual_state)
-        image_provider = get_image_provider(settings.image_provider)
+        image_provider = get_image_provider(settings)
         image = image_provider.generate_image(
             prompt_result=prompt,
             run_id=run_id,
@@ -132,4 +135,3 @@ def _utc_now() -> str:
 
 if __name__ == "__main__":
     sys.exit(main())
-

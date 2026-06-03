@@ -20,6 +20,26 @@ resource "aws_iam_role_policy_attachment" "task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+data "aws_iam_policy_document" "task_execution_secrets" {
+  count = var.fal_key_ssm_parameter_arn == "" ? 0 : 1
+
+  statement {
+    sid = "ReadFalKey"
+    actions = [
+      "ssm:GetParameters",
+    ]
+    resources = [var.fal_key_ssm_parameter_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "task_execution_secrets" {
+  count = var.fal_key_ssm_parameter_arn == "" ? 0 : 1
+
+  name   = "${var.app_name}-execution-secrets"
+  role   = aws_iam_role.task_execution.id
+  policy = data.aws_iam_policy_document.task_execution_secrets[0].json
+}
+
 resource "aws_iam_role" "task" {
   name               = "${var.app_name}-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_task_assume_role.json
@@ -99,4 +119,3 @@ resource "aws_iam_role_policy" "scheduler" {
   role   = aws_iam_role.scheduler.id
   policy = data.aws_iam_policy_document.scheduler.json
 }
-

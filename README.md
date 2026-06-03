@@ -1,6 +1,6 @@
 # market-river-generator
 
-Small scheduled Python worker that turns simple market data into a symbolic "river city" image prompt, writes a mock image artifact, stores metadata in S3, and updates `manifests/latest.json` for a website to read.
+Small scheduled Python worker that turns simple market data into a symbolic "river city" image prompt, writes an image artifact, stores metadata in S3, and updates `manifests/latest.json` for a website to read.
 
 ## What It Does
 
@@ -10,7 +10,7 @@ The app runs three weekday slots:
 - `midday`: 10:15 AM America/Los_Angeles
 - `close`: 1:20 PM America/Los_Angeles
 
-Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, fills `prompts/river_city_v0.1.txt`, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last.
+Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, fills `prompts/river_city_v0.1.txt`, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` to generate real images through fal.ai.
 
 ## Data Flow
 
@@ -19,7 +19,7 @@ Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance
 3. `app.main` fetches market data and normalizes it.
 4. `state.py` maps market and volatility moods to river/city symbols.
 5. `prompts.py` fills the prompt template.
-6. `image_model.py` uses `IMAGE_PROVIDER=mock` by default.
+6. `image_model.py` uses `IMAGE_PROVIDER=mock` by default, or `IMAGE_PROVIDER=fal` for fal.ai image generation.
 7. `publish.py` writes image, metadata, and finally `manifests/latest.json`.
 
 If market data is unusable, the app writes failure metadata under `failures/` when possible and does not update `latest.json`.
@@ -57,9 +57,40 @@ Environment variables:
 - `AWS_REGION`: defaults to `us-west-2`
 - `S3_BUCKET`: required for S3 publishing
 - `PUBLIC_BASE_URL`: optional URL prefix, for example CloudFront
-- `IMAGE_PROVIDER`: `mock`, `none`, or `future`
+- `IMAGE_PROVIDER`: `mock`, `none`, `future`, or `fal`
+- `FAL_KEY`: fal.ai API key, required when `IMAGE_PROVIDER=fal`
+- `FAL_MODEL`: defaults to `fal-ai/flux/schnell`
+- `FAL_IMAGE_SIZE`: defaults to `landscape_4_3`
+- `FAL_OUTPUT_FORMAT`: `jpeg` or `png`, defaults to `jpeg`
+- `FAL_NUM_INFERENCE_STEPS`: defaults to `4`
+- `FAL_ACCELERATION`: `none`, `regular`, or `high`; defaults to `none`
+- `FAL_ENABLE_SAFETY_CHECKER`: defaults to `true`
 - `OUTPUT_DIR`: defaults to `runs` locally and `/tmp/market-river-generator` in Docker
 - `TASK_INPUT_JSON`: optional JSON input with `slot`
+
+## fal.ai Setup
+
+Create an API key in the fal dashboard, then run locally with:
+
+```bash
+FAL_KEY="your-fal-key" IMAGE_PROVIDER=fal python -m app.main --slot open
+```
+
+For ECS, store the key in SSM Parameter Store as a SecureString, then pass its ARN to Terraform:
+
+```bash
+aws ssm put-parameter \
+  --name /market-river-generator/fal-key \
+  --type SecureString \
+  --value "your-fal-key"
+```
+
+```hcl
+image_provider            = "fal"
+fal_key_ssm_parameter_arn = "arn:aws:ssm:us-west-2:123456789012:parameter/market-river-generator/fal-key"
+```
+
+If the parameter uses a customer-managed KMS key, also grant the ECS task execution role `kms:Decrypt` for that key.
 
 ## Docker
 
@@ -175,7 +206,7 @@ failures/YYYY/MM/DD/{slot}-{run_id}.json
 
 To replace `yfinance`, keep `fetch_market_snapshot()` returning the normalized shape used by `state.py`. That isolates future market data provider changes to `app/market.py`.
 
-To add a real image model, implement a provider in `app/image_model.py` that returns `GeneratedImage`, then select it with `IMAGE_PROVIDER`. The current `future` provider is a deliberate TODO stub for OpenAI, Replicate, Bedrock, or another service.
+To add another real image model, implement a provider in `app/image_model.py` that returns `GeneratedImage`, then select it with `IMAGE_PROVIDER`. The current `fal` provider uses `fal-client` and defaults to `fal-ai/flux/schnell`; the `future` provider remains a deliberate TODO stub for OpenAI, Replicate, Bedrock, or another service.
 
 ## Assumptions
 
@@ -184,4 +215,3 @@ To add a real image model, implement a provider in `app/image_model.py` that ret
 - The worker is scheduled with EventBridge Scheduler, not an ECS Service.
 - Public subnets with `assign_public_ip = true` are used to avoid NAT Gateway cost.
 - The mock provider creates SVG artifacts, not real generated images.
-

@@ -17,6 +17,12 @@ class Settings:
     s3_bucket: str | None
     public_base_url: str | None
     image_provider: str
+    fal_model: str
+    fal_image_size: str
+    fal_output_format: str
+    fal_num_inference_steps: int
+    fal_acceleration: str
+    fal_enable_safety_checker: bool
     output_dir: Path
     log_level: str
 
@@ -28,6 +34,12 @@ class Settings:
             s3_bucket=_empty_to_none(os.getenv("S3_BUCKET")),
             public_base_url=_trim_base_url(os.getenv("PUBLIC_BASE_URL")),
             image_provider=os.getenv("IMAGE_PROVIDER", "mock").strip().lower(),
+            fal_model=os.getenv("FAL_MODEL", "fal-ai/flux/schnell").strip(),
+            fal_image_size=os.getenv("FAL_IMAGE_SIZE", "landscape_4_3").strip(),
+            fal_output_format=os.getenv("FAL_OUTPUT_FORMAT", "jpeg").strip().lower(),
+            fal_num_inference_steps=_int_from_env("FAL_NUM_INFERENCE_STEPS", default=4),
+            fal_acceleration=os.getenv("FAL_ACCELERATION", "none").strip().lower(),
+            fal_enable_safety_checker=_bool_from_env("FAL_ENABLE_SAFETY_CHECKER", default=True),
             output_dir=Path(os.getenv("OUTPUT_DIR", "runs")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )
@@ -42,6 +54,28 @@ def _empty_to_none(value: str | None) -> str | None:
 def _trim_base_url(value: str | None) -> str | None:
     clean = _empty_to_none(value)
     return clean.rstrip("/") if clean else None
+
+
+def _int_from_env(name: str, *, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+
+
+def _bool_from_env(name: str, *, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
 
 
 def parse_task_input_json(raw: str | None = None) -> dict[str, Any]:
@@ -61,4 +95,3 @@ def resolve_slot(cli_slot: str | None) -> str:
         valid = ", ".join(sorted(VALID_SLOTS))
         raise ValueError(f"slot must be one of: {valid}")
     return slot
-
