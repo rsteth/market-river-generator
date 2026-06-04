@@ -19,7 +19,9 @@ WEATHER_SNIPPETS = {
     "cloudy": (
         "Overcast cloudy weather contained around the floating city-disc, with compact cloud layers wrapping parts of "
         "the mountain and upper city without extending beyond the world. Broad diffused light creates soft shadows and "
-        "muted reflections on glass, stone, and water. The surrounding white space remains pure, empty, and unclouded."
+        "muted reflections on glass, stone, and water. This is dry cloud cover only: no rain, no drizzle, no falling "
+        "water from the clouds, no wet streets, and no rain streaks. The surrounding white space remains pure, empty, "
+        "and unclouded."
     ),
     "rainy": (
         "Rainy weather contained within the floating city-disc, with localized gray clouds, visible rainfall over the "
