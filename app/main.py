@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("starting run", extra={"_run_id": run_id, "_slot": slot, "_provider": settings.image_provider})
 
         market_snapshot = fetch_market_snapshot()
-        visual_state = derive_visual_state(market_snapshot, weather_condition=weather_condition)
+        visual_state = derive_visual_state(market_snapshot, weather_condition=weather_condition, slot=slot)
         prompt = compose_prompt(visual_state)
         image_provider = get_image_provider(settings)
         image = image_provider.generate_image(

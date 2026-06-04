@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-def derive_visual_state(snapshot: dict[str, Any], weather_condition: str = "sunny") -> dict[str, Any]:
+def derive_visual_state(snapshot: dict[str, Any], weather_condition: str = "sunny", slot: str = "open") -> dict[str, Any]:
     summary = snapshot.get("summary", {})
     avg_risk = summary.get("avg_risk_change_pct")
     vix_change = summary.get("vix_change_pct")
@@ -20,6 +20,7 @@ def derive_visual_state(snapshot: dict[str, Any], weather_condition: str = "sunn
         "market_mood": market_mood,
         "volatility_mood": volatility_mood,
         "weather": {"condition": weather_condition},
+        "time_of_day": {"slot": slot},
         "river": river,
         "city": city,
     }
