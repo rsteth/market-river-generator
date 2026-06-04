@@ -8,6 +8,7 @@ from typing import Any
 
 
 VALID_SLOTS = {"open", "midday", "close"}
+VALID_WEATHER_CONDITIONS = {"sunny", "cloudy", "rainy"}
 
 
 @dataclass(frozen=True)
@@ -95,3 +96,21 @@ def resolve_slot(cli_slot: str | None) -> str:
         valid = ", ".join(sorted(VALID_SLOTS))
         raise ValueError(f"slot must be one of: {valid}")
     return slot
+
+
+def resolve_weather_condition(cli_weather: str | None) -> str:
+    task_input = parse_task_input_json()
+    weather = (
+        cli_weather
+        or task_input.get("weather")
+        or task_input.get("weather_condition")
+        or os.getenv("WEATHER_CONDITION")
+        or "sunny"
+    )
+    if not isinstance(weather, str):
+        raise ValueError("weather condition must be a string")
+    normalized = weather.strip().lower()
+    if normalized not in VALID_WEATHER_CONDITIONS:
+        valid = ", ".join(sorted(VALID_WEATHER_CONDITIONS))
+        raise ValueError(f"weather condition must be one of: {valid}")
+    return normalized

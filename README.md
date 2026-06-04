@@ -10,15 +10,15 @@ The app runs three weekday slots:
 - `midday`: 10:15 AM America/Los_Angeles
 - `close`: 1:20 PM America/Los_Angeles
 
-Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, fills `prompts/river_city_v0.1.txt`, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` to generate real images through fal.ai.
+Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, fills `prompts/river_city_v0.1.txt`, inserts weather and market-condition prompt modules, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` to generate real images through fal.ai.
 
 ## Data Flow
 
 1. EventBridge Scheduler starts an ECS Fargate task.
 2. The schedule passes `TASK_INPUT_JSON`, for example `{"slot":"open"}`.
 3. `app.main` fetches market data and normalizes it.
-4. `state.py` maps market and volatility moods to river/city symbols.
-5. `prompts.py` fills the prompt template.
+4. `state.py` maps market and volatility moods to compact visual state.
+5. `prompts.py` fills the prompt template with weather and market-condition modules.
 6. `image_model.py` uses `IMAGE_PROVIDER=mock` by default, or `IMAGE_PROVIDER=fal` for fal.ai image generation.
 7. `publish.py` writes image, metadata, and finally `manifests/latest.json`.
 
@@ -41,12 +41,13 @@ Run a slot:
 python -m app.main --slot open
 python -m app.main --slot midday
 python -m app.main --slot close
+python -m app.main --slot open --weather rainy
 ```
 
 Or use `TASK_INPUT_JSON`:
 
 ```bash
-TASK_INPUT_JSON='{"slot":"open"}' python -m app.main
+TASK_INPUT_JSON='{"slot":"open","weather":"cloudy"}' python -m app.main
 ```
 
 ## Configuration
@@ -66,7 +67,8 @@ Environment variables:
 - `FAL_ACCELERATION`: `none`, `regular`, or `high`; defaults to `none`
 - `FAL_ENABLE_SAFETY_CHECKER`: defaults to `true`
 - `OUTPUT_DIR`: defaults to `runs` locally and `/tmp/market-river-generator` in Docker
-- `TASK_INPUT_JSON`: optional JSON input with `slot`
+- `WEATHER_CONDITION`: `sunny`, `cloudy`, or `rainy`; defaults to `sunny`
+- `TASK_INPUT_JSON`: optional JSON input with `slot` and `weather`
 
 ## fal.ai Setup
 

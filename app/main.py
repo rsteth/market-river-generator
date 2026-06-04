@@ -8,7 +8,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from app.config import Settings, VALID_SLOTS, resolve_slot
+from app.config import Settings, VALID_SLOTS, VALID_WEATHER_CONDITIONS, resolve_slot, resolve_weather_condition
 from app.image_model import get_image_provider
 from app.logging_utils import configure_logging, get_logger
 from app.market import fetch_market_snapshot
@@ -32,10 +32,11 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         slot = resolve_slot(args.slot)
+        weather_condition = resolve_weather_condition(args.weather)
         logger.info("starting run", extra={"_run_id": run_id, "_slot": slot, "_provider": settings.image_provider})
 
         market_snapshot = fetch_market_snapshot()
-        visual_state = derive_visual_state(market_snapshot)
+        visual_state = derive_visual_state(market_snapshot, weather_condition=weather_condition)
         prompt = compose_prompt(visual_state)
         image_provider = get_image_provider(settings)
         image = image_provider.generate_image(
@@ -86,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a symbolic market river image and manifest.")
     parser.add_argument("--slot", choices=sorted(VALID_SLOTS), help="Market day slot to generate.")
+    parser.add_argument("--weather", choices=sorted(VALID_WEATHER_CONDITIONS), help="Weather variant to use.")
     return parser.parse_args(argv)
 
 
