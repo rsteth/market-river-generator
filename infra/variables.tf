@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region for all resources."
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "app_name" {
@@ -11,15 +11,21 @@ variable "app_name" {
 }
 
 variable "bucket_name" {
-  description = "S3 bucket for images, metadata, failures, and manifests."
+  description = "S3 bucket for images, metadata, failures, and manifests. Leave empty to use an account-scoped default."
   type        = string
-  default     = "stethem-market-river-dev"
+  default     = ""
 }
 
 variable "image_tag" {
   description = "Docker image tag to run from ECR."
   type        = string
   default     = "latest"
+}
+
+variable "ecr_max_image_count" {
+  description = "Maximum number of container images to retain in ECR."
+  type        = number
+  default     = 14
 }
 
 variable "image_provider" {
@@ -82,16 +88,39 @@ variable "enable_public_read" {
   default     = true
 }
 
+variable "generated_artifact_retention_days" {
+  description = "Days to retain generated S3 images, metadata, and failure records."
+  type        = number
+  default     = 14
+}
+
+variable "noncurrent_version_retention_days" {
+  description = "Days to retain noncurrent S3 object versions, including older latest.json versions."
+  type        = number
+  default     = 14
+}
+
 variable "cpu" {
   description = "Fargate task CPU units."
   type        = number
-  default     = 512
+  default     = 256
 }
 
 variable "memory" {
   description = "Fargate task memory in MB."
   type        = number
-  default     = 1024
+  default     = 512
+}
+
+variable "cpu_architecture" {
+  description = "Fargate task CPU architecture. ARM64 is cheaper and matches Apple Silicon Docker builds."
+  type        = string
+  default     = "ARM64"
+
+  validation {
+    condition     = contains(["ARM64", "X86_64"], var.cpu_architecture)
+    error_message = "cpu_architecture must be ARM64 or X86_64."
+  }
 }
 
 variable "log_retention_days" {

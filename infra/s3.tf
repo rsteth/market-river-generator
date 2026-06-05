@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "assets" {
-  bucket = var.bucket_name
+  bucket = local.bucket_name
 
   tags = local.common_tags
 }
@@ -10,6 +10,76 @@ resource "aws_s3_bucket_versioning" "assets" {
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "assets" {
+  bucket = aws_s3_bucket.assets.id
+
+  rule {
+    id     = "expire-generated-images"
+    status = "Enabled"
+
+    filter {
+      prefix = "images/"
+    }
+
+    expiration {
+      days = var.generated_artifact_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_retention_days
+    }
+  }
+
+  rule {
+    id     = "expire-generated-metadata"
+    status = "Enabled"
+
+    filter {
+      prefix = "metadata/"
+    }
+
+    expiration {
+      days = var.generated_artifact_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_retention_days
+    }
+  }
+
+  rule {
+    id     = "expire-failure-records"
+    status = "Enabled"
+
+    filter {
+      prefix = "failures/"
+    }
+
+    expiration {
+      days = var.generated_artifact_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_retention_days
+    }
+  }
+
+  rule {
+    id     = "expire-old-manifest-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "manifests/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_retention_days
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.assets]
 }
 
 resource "aws_s3_bucket_public_access_block" "assets" {
@@ -60,4 +130,3 @@ resource "aws_s3_bucket_policy" "public_read" {
 
   depends_on = [aws_s3_bucket_public_access_block.assets]
 }
-

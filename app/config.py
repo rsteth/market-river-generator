@@ -31,7 +31,7 @@ class Settings:
     def from_env(cls) -> "Settings":
         return cls(
             app_name=os.getenv("APP_NAME", "market-river-generator"),
-            aws_region=os.getenv("AWS_REGION", "us-west-2"),
+            aws_region=os.getenv("AWS_REGION", "us-east-1"),
             s3_bucket=_empty_to_none(os.getenv("S3_BUCKET")),
             public_base_url=_trim_base_url(os.getenv("PUBLIC_BASE_URL")),
             image_provider=os.getenv("IMAGE_PROVIDER", "mock").strip().lower(),

@@ -1,9 +1,12 @@
+data "aws_caller_identity" "current" {}
+
 locals {
   common_tags = {
     App = var.app_name
   }
 
   container_name = var.app_name
+  bucket_name    = var.bucket_name != "" ? var.bucket_name : "${var.app_name}-${data.aws_caller_identity.current.account_id}-dev"
 
   schedules = {
     open = {
@@ -17,4 +20,3 @@ locals {
     }
   }
 }
-

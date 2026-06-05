@@ -55,7 +55,7 @@ TASK_INPUT_JSON='{"slot":"open","weather":"cloudy"}' python -m app.main
 Environment variables:
 
 - `APP_NAME`: defaults to `market-river-generator`
-- `AWS_REGION`: defaults to `us-west-2`
+- `AWS_REGION`: defaults to `us-east-1`
 - `S3_BUCKET`: required for S3 publishing
 - `PUBLIC_BASE_URL`: optional URL prefix, for example CloudFront
 - `IMAGE_PROVIDER`: `mock`, `none`, `future`, or `fal`
@@ -84,12 +84,14 @@ For ECS, store the key in SSM Parameter Store as a SecureString, then pass its A
 aws ssm put-parameter \
   --name /market-river-generator/fal-key \
   --type SecureString \
-  --value "your-fal-key"
+  --value "your-fal-key" \
+  --profile market-river \
+  --region us-east-1
 ```
 
 ```hcl
 image_provider            = "fal"
-fal_key_ssm_parameter_arn = "arn:aws:ssm:us-west-2:123456789012:parameter/market-river-generator/fal-key"
+fal_key_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/fal-key"
 ```
 
 If the parameter uses a customer-managed KMS key, also grant the ECS task execution role `kms:Decrypt` for that key.
@@ -110,6 +112,7 @@ The Docker run targets expect `.env` to exist.
 Terraform lives in `infra/`.
 
 ```bash
+aws login --profile market-river --region us-east-1
 make tf-init
 make tf-plan
 make tf-apply
@@ -117,19 +120,28 @@ make tf-apply
 
 Defaults:
 
-- AWS region: `us-west-2`
-- Bucket: `stethem-market-river-dev`
-- CPU/memory: `512` / `1024`
+- AWS region: `us-east-1`
+- AWS profile: `market-river`
+- Bucket: account-scoped default, or `bucket_name` if provided
+- CPU/memory: `256` / `512`
+- CPU architecture: `ARM64`
 - Log retention: 7 days
+- ECR retention: last 14 container images
+- S3 generated artifact retention: 14 days for `images/`, `metadata/`, and `failures/`
+- S3 manifest retention: current `manifests/latest.json` is retained; old versions expire after 14 days
 - Network: minimal public VPC and two public subnets unless `vpc_id` and `public_subnet_ids` are provided
 - Public read: enabled for `images/`, `metadata/`, and `manifests/` so a website can read generated objects directly
 
 Override values with a `terraform.tfvars` file:
 
 ```hcl
-bucket_name     = "your-unique-bucket-name"
-image_tag       = "latest"
-public_base_url = "https://your-cloudfront-domain.example"
+bucket_name      = "your-unique-bucket-name"
+image_tag        = "latest"
+public_base_url  = "https://your-cloudfront-domain.example"
+cpu_architecture = "ARM64"
+ecr_max_image_count = 14
+generated_artifact_retention_days = 14
+noncurrent_version_retention_days = 14
 ```
 
 To use an existing VPC later:
