@@ -290,7 +290,7 @@ def _placeholder_svg(slot: str, market_mood: str, volatility_mood: str, excerpt:
         f'<text x="72" y="{260 + index * 28}" class="body">{html.escape(line)}</text>'
         for index, line in enumerate(excerpt)
     )
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-label="{html.escape(title)}">
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1200 1200" role="img" aria-label="{html.escape(title)}">
   <defs>
     <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
       <stop offset="0%" stop-color="#20324a"/>
@@ -308,9 +308,9 @@ def _placeholder_svg(slot: str, market_mood: str, volatility_mood: str, excerpt:
       .small {{ font: 18px Arial, sans-serif; fill: #d8e4e5; opacity: 0.86; }}
     </style>
   </defs>
-  <rect width="1200" height="800" fill="url(#sky)"/>
-  <path d="M0 490 C180 430 300 520 470 470 C650 415 830 465 1200 390 L1200 800 L0 800 Z" fill="url(#water)" opacity="0.95"/>
-  <path d="M0 560 C200 505 330 610 520 548 C710 485 900 540 1200 455" fill="none" stroke="#f5d27a" stroke-width="10" opacity="0.55"/>
+  <rect width="1200" height="1200" fill="url(#sky)"/>
+  <path d="M0 660 C180 590 300 700 470 640 C650 565 830 625 1200 530 L1200 1200 L0 1200 Z" fill="url(#water)" opacity="0.95"/>
+  <path d="M0 745 C200 675 330 805 520 730 C710 650 900 725 1200 610" fill="none" stroke="#f5d27a" stroke-width="12" opacity="0.55"/>
   <path d="M60 420 L140 310 L220 420 Z M205 420 L205 255 L305 255 L305 420 Z M330 420 L395 290 L460 420 Z M480 420 L480 230 L595 230 L595 420 Z M620 420 L700 280 L780 420 Z M795 420 L795 245 L900 245 L900 420 Z M920 420 L990 300 L1060 420 Z" fill="#22313b" opacity="0.9"/>
   <rect x="48" y="54" width="1104" height="270" rx="18" fill="#10202a" opacity="0.72"/>
   <text x="72" y="112" class="title">{html.escape(title)}</text>

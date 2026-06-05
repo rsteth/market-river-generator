@@ -61,14 +61,14 @@ Environment variables:
 - `IMAGE_PROVIDER`: `mock`, `none`, `future`, `fal`, or `replicate`
 - `FAL_KEY`: fal.ai API key, required when `IMAGE_PROVIDER=fal`
 - `FAL_MODEL`: defaults to `fal-ai/flux/schnell`
-- `FAL_IMAGE_SIZE`: defaults to `landscape_4_3`
+- `FAL_IMAGE_SIZE`: defaults to `square_hd`
 - `FAL_OUTPUT_FORMAT`: `jpeg` or `png`, defaults to `jpeg`
 - `FAL_NUM_INFERENCE_STEPS`: defaults to `4`
 - `FAL_ACCELERATION`: `none`, `regular`, or `high`; defaults to `none`
 - `FAL_ENABLE_SAFETY_CHECKER`: defaults to `true`
 - `REPLICATE_API_TOKEN`: Replicate API token, required when `IMAGE_PROVIDER=replicate`
 - `REPLICATE_MODEL`: defaults to `black-forest-labs/flux-2-pro`
-- `REPLICATE_ASPECT_RATIO`: defaults to `4:3`
+- `REPLICATE_ASPECT_RATIO`: defaults to `1:1`
 - `REPLICATE_RESOLUTION`: defaults to `1 MP`
 - `REPLICATE_OUTPUT_FORMAT`: defaults to `webp`
 - `REPLICATE_OUTPUT_QUALITY`: defaults to `88`
@@ -133,7 +133,7 @@ aws ssm put-parameter \
 image_provider                        = "replicate"
 replicate_api_token_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/replicate-api-token"
 replicate_model                       = "black-forest-labs/flux-2-pro"
-replicate_aspect_ratio                = "4:3"
+replicate_aspect_ratio                = "1:1"
 replicate_resolution                  = "1 MP"
 replicate_output_format               = "webp"
 ```

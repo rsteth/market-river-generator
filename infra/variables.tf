@@ -54,7 +54,7 @@ variable "fal_model" {
 variable "fal_image_size" {
   description = "fal.ai image size preset used when image_provider is fal."
   type        = string
-  default     = "landscape_4_3"
+  default     = "square_hd"
 }
 
 variable "fal_output_format" {
@@ -96,7 +96,7 @@ variable "replicate_model" {
 variable "replicate_aspect_ratio" {
   description = "Replicate aspect ratio used when image_provider is replicate."
   type        = string
-  default     = "4:3"
+  default     = "1:1"
 }
 
 variable "replicate_resolution" {
