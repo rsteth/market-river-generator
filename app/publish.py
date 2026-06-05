@@ -60,13 +60,22 @@ class Publisher:
         metadata_obj = self.upload_json(metadata, metadata_key)
 
         manifest_item = {
+            "id": metadata["id"],
+            "run_id": run_id,
             "slot": slot,
             "date": created_at[:10],
+            "created_at": created_at,
             "image_url": image_obj.url if image_obj else None,
             "metadata_url": metadata_obj.url,
             "market_mood": metadata["derived_state"]["market_mood"],
             "volatility_mood": metadata["derived_state"]["volatility_mood"],
             "caption": metadata.get("caption"),
+            "prompt": {
+                "template_version": metadata["prompt"]["template_version"],
+                "hash": metadata["prompt"]["hash"],
+                "provider": metadata["prompt"]["provider"],
+            },
+            "model": metadata["model"],
         }
         existing = self.read_json(LATEST_KEY)
         latest = update_latest_manifest(existing, manifest_item, updated_at=metadata["created_at"])

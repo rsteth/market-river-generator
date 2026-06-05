@@ -156,7 +156,7 @@ class ReplicateImageProvider:
 
         output_dir.mkdir(parents=True, exist_ok=True)
         request_input: dict[str, object] = {
-            "prompt": _provider_prompt(prompt_result),
+            "prompt": provider_prompt(prompt_result),
             "aspect_ratio": self.aspect_ratio,
             "resolution": self.resolution,
             "output_format": self.output_format,
@@ -191,10 +191,10 @@ def get_image_provider(settings: Settings) -> ImageProvider:
 
 
 def _fal_prompt(prompt_result: PromptResult) -> str:
-    return _provider_prompt(prompt_result)
+    return provider_prompt(prompt_result)
 
 
-def _provider_prompt(prompt_result: PromptResult) -> str:
+def provider_prompt(prompt_result: PromptResult) -> str:
     return (
         f"{prompt_result.positive_prompt}\n\n"
         f"Avoid: {prompt_result.negative_prompt}."

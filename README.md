@@ -270,6 +270,16 @@ failures/YYYY/MM/DD/{slot}-{run_id}.json
 
 `latest.json` is updated only after image and metadata writes complete. Existing manifest items for other slots are preserved; the item for the same date and slot is replaced.
 
+Each manifest item includes the explicit `slot`, `created_at`, `run_id`, image and metadata URLs, market moods, the exact provider prompt, a SHA-256 `prompt.hash`, and selected model parameters. The linked metadata JSON also stores the separated positive and negative prompt fields, raw market snapshot, and derived visual state for deeper audits.
+
+The scheduled ECS jobs run Monday through Friday only in the `America/Los_Angeles` timezone:
+
+- `open`: 6:45 AM
+- `midday`: 10:15 AM
+- `close`: 1:20 PM
+
+There is no weekend schedule. The app does not currently skip weekday market holidays unless the schedule is disabled or adjusted.
+
 ## Swapping Data Or Image Providers
 
 To replace `yfinance`, keep `fetch_market_snapshot()` returning the normalized shape used by `state.py`. That isolates future market data provider changes to `app/market.py`.

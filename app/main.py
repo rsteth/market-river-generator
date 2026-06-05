@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -9,7 +10,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from app.config import Settings, VALID_SLOTS, VALID_WEATHER_CONDITIONS, resolve_slot, resolve_weather_condition
-from app.image_model import get_image_provider
+from app.image_model import get_image_provider, provider_prompt
 from app.logging_utils import configure_logging, get_logger
 from app.market import fetch_market_snapshot
 from app.prompts import compose_prompt
@@ -55,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             market_snapshot=market_snapshot,
             visual_state=visual_state,
             prompt=prompt,
-            provider=image.provider,
+            model=_model_metadata(settings, image.provider),
         )
         publisher = Publisher(settings)
         result = publisher.publish_success(
@@ -99,8 +100,9 @@ def _success_metadata(
     market_snapshot: dict[str, Any],
     visual_state: dict[str, Any],
     prompt: Any,
-    provider: str,
+    model: dict[str, Any],
 ) -> dict[str, Any]:
+    rendered_prompt = provider_prompt(prompt)
     return {
         "id": f"{created_at[:10]}-{slot}-{run_id}",
         "run_id": run_id,
@@ -113,10 +115,44 @@ def _success_metadata(
             "template_version": prompt.template_version,
             "positive": prompt.positive_prompt,
             "negative": prompt.negative_prompt,
+            "provider": rendered_prompt,
+            "hash": _sha256(rendered_prompt),
         },
-        "model": {"provider": provider},
+        "model": model,
         "outputs": {},
     }
+
+
+def _model_metadata(settings: Settings, provider: str) -> dict[str, Any]:
+    if provider == "fal":
+        return {
+            "provider": provider,
+            "parameters": {
+                "model": settings.fal_model,
+                "image_size": settings.fal_image_size,
+                "output_format": settings.fal_output_format,
+                "num_inference_steps": settings.fal_num_inference_steps,
+                "acceleration": settings.fal_acceleration,
+                "enable_safety_checker": settings.fal_enable_safety_checker,
+            },
+        }
+    if provider == "replicate":
+        parameters: dict[str, Any] = {
+            "model": settings.replicate_model,
+            "aspect_ratio": settings.replicate_aspect_ratio,
+            "resolution": settings.replicate_resolution,
+            "output_format": settings.replicate_output_format,
+            "output_quality": settings.replicate_output_quality,
+            "safety_tolerance": settings.replicate_safety_tolerance,
+        }
+        if settings.replicate_seed is not None:
+            parameters["seed"] = settings.replicate_seed
+        return {"provider": provider, "parameters": parameters}
+    return {"provider": provider, "parameters": {}}
+
+
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _failure_metadata(run_id: str, slot: str, created_at: str, exc: Exception) -> dict[str, Any]:
