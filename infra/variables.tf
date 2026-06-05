@@ -144,13 +144,13 @@ variable "enable_public_read" {
 variable "generated_artifact_retention_days" {
   description = "Days to retain generated S3 images, metadata, and failure records."
   type        = number
-  default     = 14
+  default     = 30
 }
 
 variable "noncurrent_version_retention_days" {
   description = "Days to retain noncurrent S3 object versions, including older latest.json versions."
   type        = number
-  default     = 14
+  default     = 30
 }
 
 variable "cpu" {

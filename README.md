@@ -173,8 +173,8 @@ Defaults:
 - CPU architecture: `ARM64`
 - Log retention: 7 days
 - ECR retention: last 3 container images
-- S3 generated artifact retention: 14 days for `images/`, `metadata/`, and `failures/`
-- S3 manifest retention: current `manifests/latest.json` is retained; old versions expire after 14 days
+- S3 generated artifact retention: 30 days for `images/`, `metadata/`, and `failures/`
+- S3 manifest retention: current `manifests/latest.json` is retained; old versions expire after 30 days
 - Network: minimal public VPC and two public subnets unless `vpc_id` and `public_subnet_ids` are provided
 - Public read: enabled for `images/`, `metadata/`, and `manifests/` so a website can read generated objects directly
 
@@ -186,8 +186,8 @@ image_tag        = "latest"
 public_base_url  = "https://your-cloudfront-domain.example"
 cpu_architecture = "ARM64"
 ecr_max_image_count = 3
-generated_artifact_retention_days = 14
-noncurrent_version_retention_days = 14
+generated_artifact_retention_days = 30
+noncurrent_version_retention_days = 30
 image_provider = "replicate"
 replicate_api_token_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/replicate-api-token"
 ```
