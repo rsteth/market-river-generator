@@ -1,0 +1,5 @@
+image_provider = "replicate"
+replicate_api_token_ssm_parameter_arn = "replace-with-your-replicate-token-ssm-parameter-arn"
+
+fal_image_size = "square_hd"
+replicate_aspect_ratio = "1:1"

@@ -90,7 +90,7 @@ For ECS, store the key in SSM Parameter Store as a SecureString, then pass its A
 
 ```bash
 aws ssm put-parameter \
-  --name /market-river-generator/fal-key \
+  --name /your/parameter/name \
   --type SecureString \
   --value "your-fal-key" \
   --overwrite \
@@ -100,7 +100,7 @@ aws ssm put-parameter \
 
 ```hcl
 image_provider            = "fal"
-fal_key_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/fal-key"
+fal_key_ssm_parameter_arn = "replace-with-your-fal-key-ssm-parameter-arn"
 ```
 
 If the parameter uses a customer-managed KMS key, also grant the ECS task execution role `kms:Decrypt` for that key.
@@ -121,7 +121,7 @@ For ECS, store the token in SSM Parameter Store as a SecureString, then pass its
 
 ```bash
 aws ssm put-parameter \
-  --name /market-river-generator/replicate-api-token \
+  --name /your/parameter/name \
   --type SecureString \
   --value "your-replicate-token" \
   --overwrite \
@@ -131,7 +131,7 @@ aws ssm put-parameter \
 
 ```hcl
 image_provider                        = "replicate"
-replicate_api_token_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/replicate-api-token"
+replicate_api_token_ssm_parameter_arn = "replace-with-your-replicate-token-ssm-parameter-arn"
 replicate_model                       = "black-forest-labs/flux-2-pro"
 replicate_aspect_ratio                = "1:1"
 replicate_resolution                  = "1 MP"
@@ -178,7 +178,7 @@ Defaults:
 - Network: minimal public VPC and two public subnets unless `vpc_id` and `public_subnet_ids` are provided
 - Public read: enabled for `images/`, `metadata/`, and `manifests/` so a website can read generated objects directly
 
-Override values with a `terraform.tfvars` file:
+Override values with a local `infra/terraform.tfvars` file. This file is ignored by git so account-specific deployment choices do not get accidentally committed; use `infra/terraform.tfvars.example` as the template.
 
 ```hcl
 bucket_name      = "your-unique-bucket-name"
@@ -189,7 +189,9 @@ ecr_max_image_count = 3
 generated_artifact_retention_days = 30
 noncurrent_version_retention_days = 30
 image_provider = "replicate"
-replicate_api_token_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/replicate-api-token"
+replicate_api_token_ssm_parameter_arn = "replace-with-your-replicate-token-ssm-parameter-arn"
+fal_image_size = "square_hd"
+replicate_aspect_ratio = "1:1"
 ```
 
 To use an existing VPC later:
