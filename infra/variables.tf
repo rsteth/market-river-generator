@@ -25,7 +25,7 @@ variable "image_tag" {
 variable "ecr_max_image_count" {
   description = "Maximum number of container images to retain in ECR."
   type        = number
-  default     = 14
+  default     = 3
 }
 
 variable "image_provider" {

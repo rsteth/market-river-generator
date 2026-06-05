@@ -11,7 +11,7 @@ ECS_TASK_DEFINITION_ARN ?=
 ECS_SECURITY_GROUP_ID ?=
 ECS_SUBNET_IDS ?=
 
-.PHONY: docker-build docker-run-open docker-run-midday docker-run-close ecr-login docker-push tf-init tf-plan tf-apply run-task-open
+.PHONY: docker-build docker-run-open docker-run-midday docker-run-close ecr-login docker-push docker-release tf-init tf-plan tf-apply run-task-open
 
 docker-build:
 	docker build --platform $(DOCKER_PLATFORM) -t $(APP_NAME):$(IMAGE_TAG) .
@@ -33,14 +33,22 @@ docker-push:
 	docker tag $(APP_NAME):$(IMAGE_TAG) $(ECR_REPOSITORY_URL):$(IMAGE_TAG)
 	docker push $(ECR_REPOSITORY_URL):$(IMAGE_TAG)
 
+docker-release:
+	@repo_url="$$(terraform -chdir=$(INFRA_DIR) output -raw ecr_repository_url 2>/dev/null)"; \
+	test -n "$$repo_url" || (echo "ECR repository URL not found. Run make tf-apply first."; exit 1); \
+	docker build --platform $(DOCKER_PLATFORM) -t $(APP_NAME):$(IMAGE_TAG) .; \
+	aws --profile $(AWS_PROFILE) ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $$(aws --profile $(AWS_PROFILE) sts get-caller-identity --query Account --output text).dkr.ecr.$(AWS_REGION).amazonaws.com; \
+	docker tag $(APP_NAME):$(IMAGE_TAG) "$$repo_url":$(IMAGE_TAG); \
+	docker push "$$repo_url":$(IMAGE_TAG)
+
 tf-init:
-	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --format env)" && terraform -chdir=$(INFRA_DIR) init
+	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --region $(AWS_REGION) --format env)" && terraform -chdir=$(INFRA_DIR) init
 
 tf-plan:
-	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --format env)" && terraform -chdir=$(INFRA_DIR) plan
+	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --region $(AWS_REGION) --format env)" && terraform -chdir=$(INFRA_DIR) plan
 
 tf-apply:
-	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --format env)" && terraform -chdir=$(INFRA_DIR) apply
+	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --region $(AWS_REGION) --format env)" && terraform -chdir=$(INFRA_DIR) apply
 
 run-task-open:
 	test -n "$(ECS_CLUSTER_NAME)"

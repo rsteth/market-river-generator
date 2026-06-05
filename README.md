@@ -85,6 +85,7 @@ aws ssm put-parameter \
   --name /market-river-generator/fal-key \
   --type SecureString \
   --value "your-fal-key" \
+  --overwrite \
   --profile market-river \
   --region us-east-1
 ```
@@ -95,6 +96,8 @@ fal_key_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market
 ```
 
 If the parameter uses a customer-managed KMS key, also grant the ECS task execution role `kms:Decrypt` for that key.
+
+Local `.env` values are not automatically copied into ECS. Terraform passes the non-secret runtime configuration into the task definition, and `FAL_KEY` is injected only when `fal_key_ssm_parameter_arn` is set.
 
 ## Docker
 
@@ -126,7 +129,7 @@ Defaults:
 - CPU/memory: `256` / `512`
 - CPU architecture: `ARM64`
 - Log retention: 7 days
-- ECR retention: last 14 container images
+- ECR retention: last 3 container images
 - S3 generated artifact retention: 14 days for `images/`, `metadata/`, and `failures/`
 - S3 manifest retention: current `manifests/latest.json` is retained; old versions expire after 14 days
 - Network: minimal public VPC and two public subnets unless `vpc_id` and `public_subnet_ids` are provided
@@ -139,7 +142,7 @@ bucket_name      = "your-unique-bucket-name"
 image_tag        = "latest"
 public_base_url  = "https://your-cloudfront-domain.example"
 cpu_architecture = "ARM64"
-ecr_max_image_count = 14
+ecr_max_image_count = 3
 generated_artifact_retention_days = 14
 noncurrent_version_retention_days = 14
 ```
@@ -165,6 +168,12 @@ Then:
 make docker-build
 make ecr-login
 make docker-push ECR_REPOSITORY_URL=$(terraform -chdir=infra output -raw ecr_repository_url)
+```
+
+Or build, authenticate, tag, and push in one step:
+
+```bash
+make docker-release
 ```
 
 If you push a new tag, set `image_tag` in Terraform and apply again so the task definition points at it.
