@@ -21,19 +21,19 @@ resource "aws_iam_role_policy_attachment" "task_execution" {
 }
 
 data "aws_iam_policy_document" "task_execution_secrets" {
-  count = var.fal_key_ssm_parameter_arn == "" ? 0 : 1
+  count = length(local.image_provider_secret_parameter_arns) == 0 ? 0 : 1
 
   statement {
-    sid = "ReadFalKey"
+    sid = "ReadImageProviderSecrets"
     actions = [
       "ssm:GetParameters",
     ]
-    resources = [var.fal_key_ssm_parameter_arn]
+    resources = local.image_provider_secret_parameter_arns
   }
 }
 
 resource "aws_iam_role_policy" "task_execution_secrets" {
-  count = var.fal_key_ssm_parameter_arn == "" ? 0 : 1
+  count = length(local.image_provider_secret_parameter_arns) == 0 ? 0 : 1
 
   name   = "${var.app_name}-execution-secrets"
   role   = aws_iam_role.task_execution.id

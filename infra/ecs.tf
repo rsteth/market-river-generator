@@ -76,16 +76,52 @@ resource "aws_ecs_task_definition" "app" {
           value = tostring(var.fal_enable_safety_checker)
         },
         {
+          name  = "REPLICATE_MODEL"
+          value = var.replicate_model
+        },
+        {
+          name  = "REPLICATE_ASPECT_RATIO"
+          value = var.replicate_aspect_ratio
+        },
+        {
+          name  = "REPLICATE_RESOLUTION"
+          value = var.replicate_resolution
+        },
+        {
+          name  = "REPLICATE_OUTPUT_FORMAT"
+          value = var.replicate_output_format
+        },
+        {
+          name  = "REPLICATE_OUTPUT_QUALITY"
+          value = tostring(var.replicate_output_quality)
+        },
+        {
+          name  = "REPLICATE_SAFETY_TOLERANCE"
+          value = tostring(var.replicate_safety_tolerance)
+        },
+        {
+          name  = "REPLICATE_SEED"
+          value = var.replicate_seed == null ? "" : tostring(var.replicate_seed)
+        },
+        {
           name  = "LOG_LEVEL"
           value = "INFO"
         },
       ]
-      secrets = var.fal_key_ssm_parameter_arn == "" ? [] : [
-        {
-          name      = "FAL_KEY"
-          valueFrom = var.fal_key_ssm_parameter_arn
-        },
-      ]
+      secrets = concat(
+        var.fal_key_ssm_parameter_arn == "" ? [] : [
+          {
+            name      = "FAL_KEY"
+            valueFrom = var.fal_key_ssm_parameter_arn
+          },
+        ],
+        var.replicate_api_token_ssm_parameter_arn == "" ? [] : [
+          {
+            name      = "REPLICATE_API_TOKEN"
+            valueFrom = var.replicate_api_token_ssm_parameter_arn
+          },
+        ],
+      )
       logConfiguration = {
         logDriver = "awslogs"
         options = {

@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .terraform/
+*.tfstate
+*.tfstate.*
 runs/
 .env
 .env.*

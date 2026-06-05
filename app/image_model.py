@@ -131,6 +131,49 @@ class FalImageProvider:
         return GeneratedImage(provider=self.name, path=path, content_type=content_type, format=image_format)
 
 
+class ReplicateImageProvider:
+    name = "replicate"
+
+    def __init__(self, settings: Settings):
+        self.model = settings.replicate_model
+        self.aspect_ratio = settings.replicate_aspect_ratio
+        self.resolution = settings.replicate_resolution
+        self.output_format = settings.replicate_output_format
+        self.output_quality = settings.replicate_output_quality
+        self.safety_tolerance = settings.replicate_safety_tolerance
+        self.seed = settings.replicate_seed
+
+    def generate_image(
+        self,
+        prompt_result: PromptResult,
+        run_id: str,
+        output_dir: Path,
+        slot: str,
+        market_mood: str,
+        volatility_mood: str,
+    ) -> GeneratedImage:
+        import replicate
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        request_input: dict[str, object] = {
+            "prompt": _provider_prompt(prompt_result),
+            "aspect_ratio": self.aspect_ratio,
+            "resolution": self.resolution,
+            "output_format": self.output_format,
+            "output_quality": self.output_quality,
+            "safety_tolerance": self.safety_tolerance,
+        }
+        if self.seed is not None:
+            request_input["seed"] = self.seed
+
+        result = replicate.run(self.model, input=request_input)
+        content_type = _content_type_for_format(self.output_format)
+        image_format = _format_for_content_type(content_type, self.output_format)
+        path = output_dir / f"{slot}-{run_id}.{image_format}"
+        _write_replicate_output(result, path)
+        return GeneratedImage(provider=self.name, path=path, content_type=content_type, format=image_format)
+
+
 def get_image_provider(settings: Settings) -> ImageProvider:
     name = settings.image_provider
     providers: dict[str, ImageProvider] = {
@@ -138,6 +181,7 @@ def get_image_provider(settings: Settings) -> ImageProvider:
         "none": NoneImageProvider(),
         "future": FutureImageProvider(),
         "fal": FalImageProvider(settings),
+        "replicate": ReplicateImageProvider(settings),
     }
     try:
         return providers[name]
@@ -147,6 +191,10 @@ def get_image_provider(settings: Settings) -> ImageProvider:
 
 
 def _fal_prompt(prompt_result: PromptResult) -> str:
+    return _provider_prompt(prompt_result)
+
+
+def _provider_prompt(prompt_result: PromptResult) -> str:
     return (
         f"{prompt_result.positive_prompt}\n\n"
         f"Avoid: {prompt_result.negative_prompt}."
@@ -173,7 +221,45 @@ def _download_image(url: str, path: Path) -> None:
         path.write_bytes(response.content)
 
 
+def _write_replicate_output(result: object, path: Path) -> None:
+    output = _first_replicate_output(result)
+    read = getattr(output, "read", None)
+    if callable(read):
+        data = read()
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        path.write_bytes(data)
+        return
+
+    url = _replicate_output_url(output)
+    if url:
+        _download_image(url, path)
+        return
+
+    raise ValueError("Replicate response did not include a readable file or URL")
+
+
+def _first_replicate_output(result: object) -> object:
+    if isinstance(result, list | tuple):
+        if not result:
+            raise ValueError("Replicate response did not include any outputs")
+        return result[0]
+    return result
+
+
+def _replicate_output_url(output: object) -> str | None:
+    if isinstance(output, str):
+        return output
+    url_method = getattr(output, "url", None)
+    if callable(url_method):
+        url = url_method()
+        return url if isinstance(url, str) else None
+    return None
+
+
 def _content_type_for_format(output_format: str) -> str:
+    if output_format == "webp":
+        return "image/webp"
     if output_format == "png":
         return "image/png"
     return "image/jpeg"
@@ -183,6 +269,8 @@ def _format_for_content_type(content_type: str, fallback: str) -> str:
     extension = mimetypes.guess_extension(content_type.split(";")[0].strip())
     if extension:
         return extension.lstrip(".").replace("jpe", "jpg")
+    if fallback == "webp":
+        return "webp"
     if fallback == "png":
         return "png"
     return "jpg"

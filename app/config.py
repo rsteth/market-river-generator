@@ -24,6 +24,13 @@ class Settings:
     fal_num_inference_steps: int
     fal_acceleration: str
     fal_enable_safety_checker: bool
+    replicate_model: str
+    replicate_aspect_ratio: str
+    replicate_resolution: str
+    replicate_output_format: str
+    replicate_output_quality: int
+    replicate_safety_tolerance: int
+    replicate_seed: int | None
     output_dir: Path
     log_level: str
 
@@ -41,6 +48,13 @@ class Settings:
             fal_num_inference_steps=_int_from_env("FAL_NUM_INFERENCE_STEPS", default=4),
             fal_acceleration=os.getenv("FAL_ACCELERATION", "none").strip().lower(),
             fal_enable_safety_checker=_bool_from_env("FAL_ENABLE_SAFETY_CHECKER", default=True),
+            replicate_model=os.getenv("REPLICATE_MODEL", "black-forest-labs/flux-2-pro").strip(),
+            replicate_aspect_ratio=os.getenv("REPLICATE_ASPECT_RATIO", "4:3").strip(),
+            replicate_resolution=os.getenv("REPLICATE_RESOLUTION", "1 MP").strip(),
+            replicate_output_format=os.getenv("REPLICATE_OUTPUT_FORMAT", "webp").strip().lower(),
+            replicate_output_quality=_int_from_env("REPLICATE_OUTPUT_QUALITY", default=88),
+            replicate_safety_tolerance=_int_from_env("REPLICATE_SAFETY_TOLERANCE", default=2),
+            replicate_seed=_optional_int_from_env("REPLICATE_SEED"),
             output_dir=Path(os.getenv("OUTPUT_DIR", "runs")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )
@@ -61,6 +75,16 @@ def _int_from_env(name: str, *, default: int) -> int:
     raw = os.getenv(name)
     if raw is None or not raw.strip():
         return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+
+
+def _optional_int_from_env(name: str) -> int | None:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return None
     try:
         return int(raw)
     except ValueError as exc:

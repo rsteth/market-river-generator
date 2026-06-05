@@ -10,7 +10,7 @@ The app runs three weekday slots:
 - `midday`: 10:15 AM America/Los_Angeles
 - `close`: 1:20 PM America/Los_Angeles
 
-Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, fills `prompts/river_city_v0.1.txt`, inserts weather, time-of-day, and market-condition prompt modules, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` to generate real images through fal.ai.
+Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, fills `prompts/river_city_v0.1.txt`, inserts weather, time-of-day, and market-condition prompt modules, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` or `IMAGE_PROVIDER=replicate` to generate real images.
 
 ## Data Flow
 
@@ -19,7 +19,7 @@ Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance
 3. `app.main` fetches market data and normalizes it.
 4. `state.py` maps market and volatility moods to compact visual state.
 5. `prompts.py` fills the prompt template with weather, time-of-day, and market-condition modules.
-6. `image_model.py` uses `IMAGE_PROVIDER=mock` by default, or `IMAGE_PROVIDER=fal` for fal.ai image generation.
+6. `image_model.py` uses `IMAGE_PROVIDER=mock` by default, or a real provider such as `fal` or `replicate`.
 7. `publish.py` writes image, metadata, and finally `manifests/latest.json`.
 
 If market data is unusable, the app writes failure metadata under `failures/` when possible and does not update `latest.json`.
@@ -58,7 +58,7 @@ Environment variables:
 - `AWS_REGION`: defaults to `us-east-1`
 - `S3_BUCKET`: required for S3 publishing
 - `PUBLIC_BASE_URL`: optional URL prefix, for example CloudFront
-- `IMAGE_PROVIDER`: `mock`, `none`, `future`, or `fal`
+- `IMAGE_PROVIDER`: `mock`, `none`, `future`, `fal`, or `replicate`
 - `FAL_KEY`: fal.ai API key, required when `IMAGE_PROVIDER=fal`
 - `FAL_MODEL`: defaults to `fal-ai/flux/schnell`
 - `FAL_IMAGE_SIZE`: defaults to `landscape_4_3`
@@ -66,6 +66,14 @@ Environment variables:
 - `FAL_NUM_INFERENCE_STEPS`: defaults to `4`
 - `FAL_ACCELERATION`: `none`, `regular`, or `high`; defaults to `none`
 - `FAL_ENABLE_SAFETY_CHECKER`: defaults to `true`
+- `REPLICATE_API_TOKEN`: Replicate API token, required when `IMAGE_PROVIDER=replicate`
+- `REPLICATE_MODEL`: defaults to `black-forest-labs/flux-2-pro`
+- `REPLICATE_ASPECT_RATIO`: defaults to `4:3`
+- `REPLICATE_RESOLUTION`: defaults to `1 MP`
+- `REPLICATE_OUTPUT_FORMAT`: defaults to `webp`
+- `REPLICATE_OUTPUT_QUALITY`: defaults to `88`
+- `REPLICATE_SAFETY_TOLERANCE`: defaults to `2`
+- `REPLICATE_SEED`: optional integer seed for reproducible generations
 - `OUTPUT_DIR`: defaults to `runs` locally and `/tmp/market-river-generator` in Docker
 - `WEATHER_CONDITION`: `sunny`, `cloudy`, or `rainy`; defaults to `sunny`
 - `TASK_INPUT_JSON`: optional JSON input with `slot` and `weather`
@@ -98,6 +106,41 @@ fal_key_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market
 If the parameter uses a customer-managed KMS key, also grant the ECS task execution role `kms:Decrypt` for that key.
 
 Local `.env` values are not automatically copied into ECS. Terraform passes the non-secret runtime configuration into the task definition, and `FAL_KEY` is injected only when `fal_key_ssm_parameter_arn` is set.
+
+## Replicate Setup
+
+Create an API token in Replicate, then run locally with:
+
+```bash
+REPLICATE_API_TOKEN="your-replicate-token" IMAGE_PROVIDER=replicate python -m app.main --slot open
+```
+
+The default Replicate model is `black-forest-labs/flux-2-pro`.
+
+For ECS, store the token in SSM Parameter Store as a SecureString, then pass its ARN to Terraform:
+
+```bash
+aws ssm put-parameter \
+  --name /market-river-generator/replicate-api-token \
+  --type SecureString \
+  --value "your-replicate-token" \
+  --overwrite \
+  --profile market-river \
+  --region us-east-1
+```
+
+```hcl
+image_provider                        = "replicate"
+replicate_api_token_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/replicate-api-token"
+replicate_model                       = "black-forest-labs/flux-2-pro"
+replicate_aspect_ratio                = "4:3"
+replicate_resolution                  = "1 MP"
+replicate_output_format               = "webp"
+```
+
+If the parameter uses a customer-managed KMS key, also grant the ECS task execution role `kms:Decrypt` for that key.
+
+Local `.env` values are not automatically copied into ECS. Terraform passes the non-secret runtime configuration into the task definition, and `REPLICATE_API_TOKEN` is injected only when `replicate_api_token_ssm_parameter_arn` is set.
 
 ## Docker
 
@@ -145,6 +188,8 @@ cpu_architecture = "ARM64"
 ecr_max_image_count = 3
 generated_artifact_retention_days = 14
 noncurrent_version_retention_days = 14
+image_provider = "replicate"
+replicate_api_token_ssm_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/market-river-generator/replicate-api-token"
 ```
 
 To use an existing VPC later:
@@ -212,7 +257,7 @@ aws logs tail /ecs/market-river-generator --follow
 Successful runs:
 
 ```text
-images/YYYY/MM/DD/{slot}-{run_id}.svg
+images/YYYY/MM/DD/{slot}-{run_id}.{svg|jpg|png|webp}
 metadata/YYYY/MM/DD/{slot}-{run_id}.json
 manifests/latest.json
 ```
@@ -229,7 +274,7 @@ failures/YYYY/MM/DD/{slot}-{run_id}.json
 
 To replace `yfinance`, keep `fetch_market_snapshot()` returning the normalized shape used by `state.py`. That isolates future market data provider changes to `app/market.py`.
 
-To add another real image model, implement a provider in `app/image_model.py` that returns `GeneratedImage`, then select it with `IMAGE_PROVIDER`. The current `fal` provider uses `fal-client` and defaults to `fal-ai/flux/schnell`; the `future` provider remains a deliberate TODO stub for OpenAI, Replicate, Bedrock, or another service.
+To add another real image model, implement a provider in `app/image_model.py` that returns `GeneratedImage`, then select it with `IMAGE_PROVIDER`. The current real providers are `fal`, which uses `fal-client`, and `replicate`, which uses Replicate's Python client. Provider-specific settings stay inside the provider implementations; publishing code only receives a `GeneratedImage`.
 
 ## Assumptions
 

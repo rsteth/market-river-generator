@@ -29,9 +29,14 @@ variable "ecr_max_image_count" {
 }
 
 variable "image_provider" {
-  description = "Image provider selected by the application. Use mock, none, future, or fal."
+  description = "Image provider selected by the application. Use mock, none, future, fal, or replicate."
   type        = string
   default     = "mock"
+
+  validation {
+    condition     = contains(["mock", "none", "future", "fal", "replicate"], var.image_provider)
+    error_message = "image_provider must be mock, none, future, fal, or replicate."
+  }
 }
 
 variable "fal_key_ssm_parameter_arn" {
@@ -74,6 +79,54 @@ variable "fal_enable_safety_checker" {
   description = "Enable fal.ai safety checker when image_provider is fal."
   type        = bool
   default     = true
+}
+
+variable "replicate_api_token_ssm_parameter_arn" {
+  description = "Optional ARN of a SecureString SSM parameter containing REPLICATE_API_TOKEN for ECS tasks."
+  type        = string
+  default     = ""
+}
+
+variable "replicate_model" {
+  description = "Replicate model identifier used when image_provider is replicate."
+  type        = string
+  default     = "black-forest-labs/flux-2-pro"
+}
+
+variable "replicate_aspect_ratio" {
+  description = "Replicate aspect ratio used when image_provider is replicate."
+  type        = string
+  default     = "4:3"
+}
+
+variable "replicate_resolution" {
+  description = "Replicate output resolution used when image_provider is replicate."
+  type        = string
+  default     = "1 MP"
+}
+
+variable "replicate_output_format" {
+  description = "Replicate output image format used when image_provider is replicate."
+  type        = string
+  default     = "webp"
+}
+
+variable "replicate_output_quality" {
+  description = "Replicate output quality used when image_provider is replicate."
+  type        = number
+  default     = 88
+}
+
+variable "replicate_safety_tolerance" {
+  description = "Replicate safety tolerance used when image_provider is replicate. 1 is most strict, 5 is most permissive."
+  type        = number
+  default     = 2
+}
+
+variable "replicate_seed" {
+  description = "Optional Replicate seed. Leave null for random generation."
+  type        = number
+  default     = null
 }
 
 variable "public_base_url" {
