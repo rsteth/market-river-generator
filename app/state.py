@@ -29,7 +29,23 @@ def derive_visual_state(snapshot: dict[str, Any], weather_condition: str = "sunn
 def caption_for_state(state: dict[str, Any]) -> str:
     river = state["river"]
     city = state["city"]
-    return f"A {river['speed']}, {river['depth']} river under {city['lighting']} city light."
+    opening = _caption_opening(state)
+    return f"{opening}. a {river['speed']}, {river['depth']} river under {city['lighting']} city light"
+
+
+def _caption_opening(state: dict[str, Any]) -> str:
+    weather = state.get("weather", {}).get("condition", "sunny")
+    time_of_day = state.get("time_of_day")
+    slot = time_of_day.get("slot") if isinstance(time_of_day, dict) else time_of_day
+    normalized_slot = str(slot or "open").strip().lower()
+    if normalized_slot == "close":
+        weather_label = "clear" if weather == "sunny" else weather
+        return f"a {weather_label} evening"
+    caption_time = {
+        "open": "morning",
+        "midday": "midday",
+    }.get(normalized_slot, "morning")
+    return f"a {weather} {caption_time}"
 
 
 def _market_mood(avg_risk: float | None) -> str:
