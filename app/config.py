@@ -31,6 +31,8 @@ class Settings:
     replicate_output_quality: int
     replicate_safety_tolerance: int
     replicate_seed: int | None
+    prompt_active_key: str
+    allow_bundled_prompt_fallback: bool
     output_dir: Path
     log_level: str
 
@@ -55,6 +57,8 @@ class Settings:
             replicate_output_quality=_int_from_env("REPLICATE_OUTPUT_QUALITY", default=88),
             replicate_safety_tolerance=_int_from_env("REPLICATE_SAFETY_TOLERANCE", default=2),
             replicate_seed=_optional_int_from_env("REPLICATE_SEED"),
+            prompt_active_key=os.getenv("PROMPT_ACTIVE_KEY", "prompts/river_city/active.json").strip(),
+            allow_bundled_prompt_fallback=_bool_from_env("ALLOW_BUNDLED_PROMPT_FALLBACK", default=False),
             output_dir=Path(os.getenv("OUTPUT_DIR", "runs")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )

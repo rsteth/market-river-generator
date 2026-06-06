@@ -10,7 +10,7 @@ The app runs three weekday slots:
 - `midday`: 10:15 AM America/Los_Angeles
 - `close`: 1:20 PM America/Los_Angeles
 
-Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, fills `prompts/river_city_v0.1.txt`, inserts weather, time-of-day, and market-condition prompt modules, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` or `IMAGE_PROVIDER=replicate` to generate real images.
+Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, loads the active prompt template from S3, inserts weather, time-of-day, and market-condition prompt modules, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` or `IMAGE_PROVIDER=replicate` to generate real images.
 
 ## Data Flow
 
@@ -18,7 +18,7 @@ Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance
 2. The schedule passes `TASK_INPUT_JSON`, for example `{"slot":"open"}`.
 3. `app.main` fetches market data and normalizes it.
 4. `state.py` maps market and volatility moods to compact visual state.
-5. `prompts.py` fills the prompt template with weather, time-of-day, and market-condition modules.
+5. `prompt_registry.py` loads the active S3 prompt template, then `prompts.py` fills it with weather, time-of-day, and market-condition modules.
 6. `image_model.py` uses `IMAGE_PROVIDER=mock` by default, or a real provider such as `fal` or `replicate`.
 7. `publish.py` writes image, metadata, and finally `manifests/latest.json`.
 
@@ -74,6 +74,8 @@ Environment variables:
 - `REPLICATE_OUTPUT_QUALITY`: defaults to `88`
 - `REPLICATE_SAFETY_TOLERANCE`: defaults to `2`
 - `REPLICATE_SEED`: optional integer seed for reproducible generations
+- `PROMPT_ACTIVE_KEY`: S3 key for the active prompt pointer; defaults to `prompts/river_city/active.json`
+- `ALLOW_BUNDLED_PROMPT_FALLBACK`: defaults to `false`; when `S3_BUCKET` is set, keep this false so failed prompt registry loads fail closed
 - `OUTPUT_DIR`: defaults to `runs` locally and `/tmp/market-river-generator` in Docker
 - `WEATHER_CONDITION`: `sunny`, `cloudy`, or `rainy`; defaults to `sunny`
 - `TASK_INPUT_JSON`: optional JSON input with `slot` and `weather`
@@ -192,6 +194,8 @@ image_provider = "replicate"
 replicate_api_token_ssm_parameter_arn = "replace-with-your-replicate-token-ssm-parameter-arn"
 fal_image_size = "square_hd"
 replicate_aspect_ratio = "1:1"
+prompt_active_key = "prompts/river_city/active.json"
+allow_bundled_prompt_fallback = false
 ```
 
 To use an existing VPC later:
@@ -224,6 +228,36 @@ make docker-release
 ```
 
 If you push a new tag, set `image_tag` in Terraform and apply again so the task definition points at it.
+
+## Prompt Registry
+
+Prompt templates are edited in the repo and promoted through S3. ECS reads `prompts/river_city/active.json`, which points at an immutable versioned template object under `prompts/river_city/versions/`.
+
+Validate the local prompt:
+
+```bash
+make prompt-validate
+```
+
+Publish a versioned template object:
+
+```bash
+make prompt-publish PROMPT_FILE=prompts/river_city_v0.2.txt PROMPT_VERSION=river_city_v0.2
+```
+
+Promote that version by updating the active pointer:
+
+```bash
+make prompt-promote PROMPT_VERSION=river_city_v0.2 PROMPT_NOTES="Adds Vancouver and Tokyo modern city anchor"
+```
+
+Inspect the active pointer:
+
+```bash
+make prompt-active
+```
+
+Each generated metadata record stores the active pointer key, template object key, template SHA-256, rendered provider prompt, and rendered prompt SHA-256. Local runs with no `S3_BUCKET` use the bundled prompt file.
 
 ## Manual ECS Run
 
@@ -262,6 +296,8 @@ Successful runs:
 images/YYYY/MM/DD/{slot}-{run_id}.{svg|jpg|png|webp}
 metadata/YYYY/MM/DD/{slot}-{run_id}.json
 manifests/latest.json
+prompts/river_city/active.json
+prompts/river_city/versions/{version}.txt
 ```
 
 Failures:
@@ -272,7 +308,7 @@ failures/YYYY/MM/DD/{slot}-{run_id}.json
 
 `latest.json` is updated only after image and metadata writes complete. Existing manifest items for other slots are preserved; the item for the same date and slot is replaced.
 
-Each manifest item includes the explicit `slot`, `created_at`, `run_id`, image and metadata URLs, market moods, the exact provider prompt, a SHA-256 `prompt.hash`, and selected model parameters. The linked metadata JSON also stores the separated positive and negative prompt fields, raw market snapshot, and derived visual state for deeper audits.
+Each manifest item includes the explicit `slot`, `created_at`, `run_id`, image and metadata URLs, market moods, prompt registry metadata, the exact provider prompt, a SHA-256 `prompt.hash`, and selected model parameters. The linked metadata JSON also stores the separated positive and negative prompt fields, raw market snapshot, and derived visual state for deeper audits.
 
 The scheduled ECS jobs run Monday through Friday only in the `America/Los_Angeles` timezone:
 

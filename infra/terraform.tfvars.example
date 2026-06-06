@@ -3,3 +3,6 @@ replicate_api_token_ssm_parameter_arn = "replace-with-your-replicate-token-ssm-p
 
 fal_image_size = "square_hd"
 replicate_aspect_ratio = "1:1"
+
+prompt_active_key = "prompts/river_city/active.json"
+allow_bundled_prompt_fallback = false

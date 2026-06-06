@@ -71,7 +71,12 @@ class Publisher:
             "volatility_mood": metadata["derived_state"]["volatility_mood"],
             "caption": metadata.get("caption"),
             "prompt": {
+                "id": metadata["prompt"]["id"],
                 "template_version": metadata["prompt"]["template_version"],
+                "source": metadata["prompt"]["source"],
+                "template_sha256": metadata["prompt"]["template_sha256"],
+                "template_s3_key": metadata["prompt"]["template_s3_key"],
+                "active_s3_key": metadata["prompt"]["active_s3_key"],
                 "hash": metadata["prompt"]["hash"],
                 "provider": metadata["prompt"]["provider"],
             },

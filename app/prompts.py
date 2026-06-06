@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
-TEMPLATE_VERSION = "river_city_v0.1"
-DEFAULT_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "prompts" / "river_city_v0.1.txt"
+PROMPT_ID = "river_city"
+TEMPLATE_VERSION = "river_city_v0.2"
+DEFAULT_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "prompts" / "river_city_v0.2.txt"
 NEGATIVE_PROMPT = "text, numbers, logos, stock charts, candlesticks, tickers, people in foreground"
 DEFAULT_WEATHER_CONDITION = "sunny"
 WEATHER_SNIPPETS = {
@@ -96,23 +98,59 @@ class PromptResult:
     template_version: str
     positive_prompt: str
     negative_prompt: str
+    prompt_id: str = PROMPT_ID
+    source: str = "bundled"
+    template_sha256: str | None = None
+    template_s3_key: str | None = None
+    active_s3_key: str | None = None
 
 
-def compose_prompt(state: dict[str, Any], template_path: Path = DEFAULT_TEMPLATE_PATH) -> PromptResult:
-    template = template_path.read_text(encoding="utf-8")
+@dataclass(frozen=True)
+class PromptTemplate:
+    prompt_id: str
+    version: str
+    text: str
+    source: str
+    sha256: str
+    template_s3_key: str | None = None
+    active_s3_key: str | None = None
+
+
+def bundled_prompt_template(template_path: Path = DEFAULT_TEMPLATE_PATH) -> PromptTemplate:
+    text = template_path.read_text(encoding="utf-8")
+    return PromptTemplate(
+        prompt_id=PROMPT_ID,
+        version=TEMPLATE_VERSION,
+        text=text,
+        source="bundled",
+        sha256=sha256_text(text),
+    )
+
+
+def compose_prompt(state: dict[str, Any], template: PromptTemplate | None = None) -> PromptResult:
+    prompt_template = template or bundled_prompt_template()
     weather = WEATHER_SNIPPETS[_weather_condition(state)]
     time_of_day = TIME_OF_DAY_SNIPPETS[_time_of_day(state)]
     market_condition = MARKET_CONDITION_SNIPPETS[_market_condition(state)]
-    positive = template.format(
+    positive = prompt_template.text.format(
         weather=weather,
         time_of_day=time_of_day,
         market_condition=market_condition,
     ).strip()
     return PromptResult(
-        template_version=TEMPLATE_VERSION,
+        prompt_id=prompt_template.prompt_id,
+        template_version=prompt_template.version,
         positive_prompt=positive,
         negative_prompt=NEGATIVE_PROMPT,
+        source=prompt_template.source,
+        template_sha256=prompt_template.sha256,
+        template_s3_key=prompt_template.template_s3_key,
+        active_s3_key=prompt_template.active_s3_key,
     )
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _weather_condition(state: dict[str, Any]) -> str:

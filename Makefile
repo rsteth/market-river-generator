@@ -5,13 +5,19 @@ AWS_PROFILE ?= market-river
 DOCKER_PLATFORM ?= linux/arm64
 ENV_FILE ?= .env
 INFRA_DIR ?= infra
+PYTHON ?= .venv/bin/python
+PROMPT_FILE ?= prompts/river_city_v0.2.txt
+PROMPT_VERSION ?= river_city_v0.2
+PROMPT_ID ?= river_city
+PROMPT_ACTIVE_KEY ?= prompts/river_city/active.json
+PROMPT_NOTES ?=
 ECR_REPOSITORY_URL ?=
 ECS_CLUSTER_NAME ?=
 ECS_TASK_DEFINITION_ARN ?=
 ECS_SECURITY_GROUP_ID ?=
 ECS_SUBNET_IDS ?=
 
-.PHONY: docker-build docker-run-open docker-run-midday docker-run-close ecr-login docker-push docker-release tf-init tf-plan tf-apply run-task-open
+.PHONY: docker-build docker-run-open docker-run-midday docker-run-close ecr-login docker-push docker-release tf-init tf-plan tf-apply prompt-validate prompt-publish prompt-promote prompt-active run-task-open
 
 docker-build:
 	docker build --platform $(DOCKER_PLATFORM) -t $(APP_NAME):$(IMAGE_TAG) .
@@ -49,6 +55,27 @@ tf-plan:
 
 tf-apply:
 	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --region $(AWS_REGION) --format env)" && terraform -chdir=$(INFRA_DIR) apply
+
+prompt-validate:
+	$(PYTHON) scripts/prompt_registry.py --region $(AWS_REGION) validate --file $(PROMPT_FILE)
+
+prompt-publish:
+	@bucket="$$(terraform -chdir=$(INFRA_DIR) output -raw bucket_name 2>/dev/null)"; \
+	test -n "$$bucket" || (echo "S3 bucket not found. Run make tf-apply first."; exit 1); \
+	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --region $(AWS_REGION) --format env)"; \
+	$(PYTHON) scripts/prompt_registry.py --region $(AWS_REGION) publish --bucket "$$bucket" --prompt-id $(PROMPT_ID) --file $(PROMPT_FILE) --version $(PROMPT_VERSION)
+
+prompt-promote:
+	@bucket="$$(terraform -chdir=$(INFRA_DIR) output -raw bucket_name 2>/dev/null)"; \
+	test -n "$$bucket" || (echo "S3 bucket not found. Run make tf-apply first."; exit 1); \
+	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --region $(AWS_REGION) --format env)"; \
+	$(PYTHON) scripts/prompt_registry.py --region $(AWS_REGION) promote --bucket "$$bucket" --prompt-id $(PROMPT_ID) --active-key $(PROMPT_ACTIVE_KEY) --version $(PROMPT_VERSION) --notes "$(PROMPT_NOTES)"
+
+prompt-active:
+	@bucket="$$(terraform -chdir=$(INFRA_DIR) output -raw bucket_name 2>/dev/null)"; \
+	test -n "$$bucket" || (echo "S3 bucket not found. Run make tf-apply first."; exit 1); \
+	eval "$$(aws configure export-credentials --profile $(AWS_PROFILE) --region $(AWS_REGION) --format env)"; \
+	$(PYTHON) scripts/prompt_registry.py --region $(AWS_REGION) active --bucket "$$bucket" --prompt-id $(PROMPT_ID) --active-key $(PROMPT_ACTIVE_KEY)
 
 run-task-open:
 	test -n "$(ECS_CLUSTER_NAME)"

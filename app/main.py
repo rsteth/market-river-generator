@@ -13,6 +13,7 @@ from app.config import Settings, VALID_SLOTS, VALID_WEATHER_CONDITIONS, resolve_
 from app.image_model import get_image_provider, provider_prompt
 from app.logging_utils import configure_logging, get_logger
 from app.market import fetch_market_snapshot
+from app.prompt_registry import load_active_prompt_template
 from app.prompts import compose_prompt
 from app.publish import Publisher
 from app.state import caption_for_state, derive_visual_state
@@ -38,7 +39,8 @@ def main(argv: list[str] | None = None) -> int:
 
         market_snapshot = fetch_market_snapshot()
         visual_state = derive_visual_state(market_snapshot, weather_condition=weather_condition, slot=slot)
-        prompt = compose_prompt(visual_state)
+        prompt_template = load_active_prompt_template(settings)
+        prompt = compose_prompt(visual_state, template=prompt_template)
         image_provider = get_image_provider(settings)
         image = image_provider.generate_image(
             prompt_result=prompt,
@@ -112,7 +114,12 @@ def _success_metadata(
         "derived_state": visual_state,
         "caption": caption_for_state(visual_state),
         "prompt": {
+            "id": prompt.prompt_id,
             "template_version": prompt.template_version,
+            "source": prompt.source,
+            "template_sha256": prompt.template_sha256,
+            "template_s3_key": prompt.template_s3_key,
+            "active_s3_key": prompt.active_s3_key,
             "positive": prompt.positive_prompt,
             "negative": prompt.negative_prompt,
             "provider": rendered_prompt,

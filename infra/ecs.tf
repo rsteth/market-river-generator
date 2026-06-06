@@ -104,6 +104,14 @@ resource "aws_ecs_task_definition" "app" {
           value = var.replicate_seed == null ? "" : tostring(var.replicate_seed)
         },
         {
+          name  = "PROMPT_ACTIVE_KEY"
+          value = var.prompt_active_key
+        },
+        {
+          name  = "ALLOW_BUNDLED_PROMPT_FALLBACK"
+          value = tostring(var.allow_bundled_prompt_fallback)
+        },
+        {
           name  = "LOG_LEVEL"
           value = "INFO"
         },

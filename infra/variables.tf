@@ -129,6 +129,18 @@ variable "replicate_seed" {
   default     = null
 }
 
+variable "prompt_active_key" {
+  description = "S3 object key for the active prompt registry pointer."
+  type        = string
+  default     = "prompts/river_city/active.json"
+}
+
+variable "allow_bundled_prompt_fallback" {
+  description = "Allow ECS runs to use the bundled prompt if the S3 prompt registry cannot be loaded."
+  type        = bool
+  default     = false
+}
+
 variable "public_base_url" {
   description = "Optional public URL prefix for S3 objects, such as a CloudFront distribution URL."
   type        = string
