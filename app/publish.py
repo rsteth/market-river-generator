@@ -63,6 +63,7 @@ class Publisher:
             "id": metadata["id"],
             "run_id": run_id,
             "slot": slot,
+            "weather": metadata["weather"],
             "date": created_at[:10],
             "created_at": created_at,
             "image_url": image_obj.url if image_obj else None,

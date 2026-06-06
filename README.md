@@ -10,7 +10,7 @@ The app runs three weekday slots:
 - `midday`: 10:15 AM America/Los_Angeles
 - `close`: 1:20 PM America/Los_Angeles
 
-Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, loads the active prompt template from S3, inserts weather, time-of-day, and market-condition prompt modules, generates a mock SVG by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` or `IMAGE_PROVIDER=replicate` to generate real images.
+Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance`, derives a compact visual state, loads the active prompt template from S3, generates sunny, cloudy, and rainy weather variants by default, uploads artifacts and metadata, then updates `manifests/latest.json` last. Set `IMAGE_PROVIDER=fal` or `IMAGE_PROVIDER=replicate` to generate real images.
 
 ## Data Flow
 
@@ -18,7 +18,7 @@ Each run fetches recent market data for `SPY`, `QQQ`, and `^VIX` using `yfinance
 2. The schedule passes `TASK_INPUT_JSON`, for example `{"slot":"open"}`.
 3. `app.main` fetches market data and normalizes it.
 4. `state.py` maps market and volatility moods to compact visual state.
-5. `prompt_registry.py` loads the active S3 prompt template, then `prompts.py` fills it with weather, time-of-day, and market-condition modules.
+5. `prompt_registry.py` loads the active S3 prompt template, then `prompts.py` fills it with weather, time-of-day, and market-condition modules for each requested weather variant.
 6. `image_model.py` uses `IMAGE_PROVIDER=mock` by default, or a real provider such as `fal` or `replicate`.
 7. `publish.py` writes image, metadata, and finally `manifests/latest.json`.
 
@@ -43,6 +43,8 @@ python -m app.main --slot midday
 python -m app.main --slot close
 python -m app.main --slot open --weather rainy
 ```
+
+When no weather is provided, the app generates all three variants: `sunny`, `cloudy`, and `rainy`. Pass `--weather sunny`, `--weather cloudy`, or `--weather rainy` to generate only one variant.
 
 Or use `TASK_INPUT_JSON`:
 
@@ -77,7 +79,7 @@ Environment variables:
 - `PROMPT_ACTIVE_KEY`: S3 key for the active prompt pointer; defaults to `prompts/river_city/active.json`
 - `ALLOW_BUNDLED_PROMPT_FALLBACK`: defaults to `false`; when `S3_BUCKET` is set, keep this false so failed prompt registry loads fail closed
 - `OUTPUT_DIR`: defaults to `runs` locally and `/tmp/market-river-generator` in Docker
-- `WEATHER_CONDITION`: `sunny`, `cloudy`, or `rainy`; defaults to `sunny`
+- `WEATHER_CONDITION`: `sunny`, `cloudy`, `rainy`, or `all`; defaults to `all`
 - `TASK_INPUT_JSON`: optional JSON input with `slot` and `weather`
 
 ## fal.ai Setup
@@ -306,9 +308,9 @@ Failures:
 failures/YYYY/MM/DD/{slot}-{run_id}.json
 ```
 
-`latest.json` is updated only after image and metadata writes complete. Existing manifest items for other slots are preserved; the item for the same date and slot is replaced.
+`latest.json` is updated only after image and metadata writes complete. Existing manifest items for other slots are preserved; the item for the same date, slot, and weather is replaced. New weather-aware items remove old legacy slot-only items for the same date and slot.
 
-Each manifest item includes the explicit `slot`, `created_at`, `run_id`, image and metadata URLs, market moods, prompt registry metadata, the exact provider prompt, a SHA-256 `prompt.hash`, and selected model parameters. The linked metadata JSON also stores the separated positive and negative prompt fields, raw market snapshot, and derived visual state for deeper audits.
+Each manifest item includes the explicit `slot`, `weather`, `created_at`, `run_id`, image and metadata URLs, market moods, prompt registry metadata, the exact provider prompt, a SHA-256 `prompt.hash`, and selected model parameters. The linked metadata JSON also stores the separated positive and negative prompt fields, raw market snapshot, and derived visual state for deeper audits.
 
 The scheduled ECS jobs run Monday through Friday only in the `America/Los_Angeles` timezone:
 

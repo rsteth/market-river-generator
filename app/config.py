@@ -8,7 +8,8 @@ from typing import Any
 
 
 VALID_SLOTS = {"open", "midday", "close"}
-VALID_WEATHER_CONDITIONS = {"sunny", "cloudy", "rainy"}
+WEATHER_VARIANT_ORDER = ("sunny", "cloudy", "rainy")
+VALID_WEATHER_CONDITIONS = set(WEATHER_VARIANT_ORDER)
 
 
 @dataclass(frozen=True)
@@ -127,18 +128,27 @@ def resolve_slot(cli_slot: str | None) -> str:
 
 
 def resolve_weather_condition(cli_weather: str | None) -> str:
+    conditions = resolve_weather_conditions(cli_weather)
+    if len(conditions) != 1:
+        raise ValueError("weather condition must resolve to exactly one variant")
+    return conditions[0]
+
+
+def resolve_weather_conditions(cli_weather: str | None) -> list[str]:
     task_input = parse_task_input_json()
     weather = (
         cli_weather
         or task_input.get("weather")
         or task_input.get("weather_condition")
         or os.getenv("WEATHER_CONDITION")
-        or "sunny"
+        or "all"
     )
     if not isinstance(weather, str):
         raise ValueError("weather condition must be a string")
     normalized = weather.strip().lower()
+    if normalized == "all":
+        return list(WEATHER_VARIANT_ORDER)
     if normalized not in VALID_WEATHER_CONDITIONS:
-        valid = ", ".join(sorted(VALID_WEATHER_CONDITIONS))
+        valid = ", ".join([*WEATHER_VARIANT_ORDER, "all"])
         raise ValueError(f"weather condition must be one of: {valid}")
-    return normalized
+    return [normalized]

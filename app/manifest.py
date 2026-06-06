@@ -4,6 +4,7 @@ from typing import Any
 
 
 SLOT_ORDER = {"open": 0, "midday": 1, "close": 2}
+WEATHER_ORDER = {"sunny": 0, "cloudy": 1, "rainy": 2}
 
 
 def update_latest_manifest(
@@ -13,12 +14,23 @@ def update_latest_manifest(
 ) -> dict[str, Any]:
     items = []
     if existing and isinstance(existing.get("items"), list):
-        items = [old for old in existing["items"] if _item_key(old) != _item_key(item)]
+        items = [old for old in existing["items"] if not _same_manifest_slot(old, item)]
     items.append(item)
-    items.sort(key=lambda value: (value.get("date", ""), SLOT_ORDER.get(value.get("slot", ""), 99)))
+    items.sort(
+        key=lambda value: (
+            value.get("date", ""),
+            SLOT_ORDER.get(value.get("slot", ""), 99),
+            WEATHER_ORDER.get(value.get("weather", ""), 99),
+        )
+    )
     return {"updated_at": updated_at, "items": items}
 
 
-def _item_key(item: dict[str, Any]) -> tuple[str | None, str | None]:
-    return item.get("date"), item.get("slot")
-
+def _same_manifest_slot(old: dict[str, Any], new: dict[str, Any]) -> bool:
+    if old.get("date") != new.get("date") or old.get("slot") != new.get("slot"):
+        return False
+    new_weather = new.get("weather")
+    old_weather = old.get("weather")
+    if new_weather:
+        return old_weather in {None, new_weather}
+    return old_weather == new_weather
