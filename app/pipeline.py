@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from typing import Callable, Protocol
 
 from app.config import Settings
@@ -122,8 +123,14 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
             },
         )
 
+        market_fetch_started = perf_counter()
         market_snapshot = dependencies.market_data.fetch_snapshot()
+        market_fetch_ms = _elapsed_ms(market_fetch_started)
+
+        prompt_load_started = perf_counter()
         prompt_template = dependencies.prompt_templates.load_template()
+        prompt_load_ms = _elapsed_ms(prompt_load_started)
+
         model = model_metadata(dependencies.settings, dependencies.image_provider.name)
         audit_artifact = pipeline_run_artifact(
             run_id=run_id,
@@ -139,7 +146,12 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
         for weather_condition in request.weather_conditions:
             variant_run_id = _variant_run_id(run_id, weather_condition, request.weather_conditions)
             visual_state = derive_visual_state(market_snapshot, weather_condition=weather_condition, slot=slot)
+
+            prompt_compose_started = perf_counter()
             prompt = compose_prompt(visual_state, template=prompt_template)
+            prompt_compose_ms = _elapsed_ms(prompt_compose_started)
+
+            image_generation_started = perf_counter()
             image = dependencies.image_provider.generate_image(
                 prompt_result=prompt,
                 run_id=variant_run_id,
@@ -148,6 +160,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                 market_mood=visual_state.market_mood,
                 volatility_mood=visual_state.volatility_mood,
             )
+            image_generation_ms = _elapsed_ms(image_generation_started)
 
             metadata = success_metadata(
                 run_id=variant_run_id,
@@ -158,7 +171,9 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                 prompt=prompt,
                 model=model,
             )
+            publish_started = perf_counter()
             publish_result = _publish_success(dependencies.publisher, metadata, image)
+            publish_ms = _elapsed_ms(publish_started)
             published.append(
                 PublishedVariant(
                     weather=weather_condition,
@@ -174,8 +189,14 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                     "_run_id": variant_run_id,
                     "_slot": slot,
                     "_weather": weather_condition,
+                    "_provider": dependencies.image_provider.name,
                     "_metadata_key": publish_result.metadata.key,
                     "_latest_key": publish_result.latest.key,
+                    "_market_fetch_ms": market_fetch_ms,
+                    "_prompt_load_ms": prompt_load_ms,
+                    "_prompt_compose_ms": prompt_compose_ms,
+                    "_image_generation_ms": image_generation_ms,
+                    "_publish_ms": publish_ms,
                 },
             )
         dependencies.publisher.publish_pipeline_run(audit_artifact.with_status("succeeded"))
@@ -228,6 +249,10 @@ def _variant_run_id(base_run_id: str, weather_condition: str, weather_conditions
 
 def _new_run_id() -> str:
     return uuid.uuid4().hex[:12]
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return round((perf_counter() - started_at) * 1000)
 
 
 def _utc_now() -> str:
