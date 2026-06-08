@@ -34,7 +34,19 @@ resource "aws_scheduler_schedule" "market_slots" {
           environment = [
             {
               name  = "TASK_INPUT_JSON"
-              value = jsonencode({ slot = each.key })
+              value = jsonencode({
+                slot           = each.key
+                schedule_name  = "${var.app_name}-${each.key}"
+                schedule_group = "default"
+              })
+            },
+            {
+              name  = "SCHEDULE_NAME"
+              value = "${var.app_name}-${each.key}"
+            },
+            {
+              name  = "SCHEDULE_SLOT"
+              value = each.key
             }
           ]
         }
@@ -42,4 +54,3 @@ resource "aws_scheduler_schedule" "market_slots" {
     })
   }
 }
-

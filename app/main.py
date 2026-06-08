@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from app.config import Settings, VALID_SLOTS, VALID_WEATHER_CONDITIONS, resolve_run_request
 from app.logging_utils import configure_logging, get_logger
 from app.pipeline import default_dependencies, run_pipeline
+from app.runtime_context import load_runtime_log_context
 
 
 logger = get_logger(__name__)
@@ -17,7 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     load_dotenv()
     settings = Settings.from_env()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, context=load_runtime_log_context())
 
     try:
         request = resolve_run_request(args.slot, args.weather)
