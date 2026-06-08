@@ -17,7 +17,16 @@ ECS_TASK_DEFINITION_ARN ?=
 ECS_SECURITY_GROUP_ID ?=
 ECS_SUBNET_IDS ?=
 
-.PHONY: docker-build docker-run-open docker-run-midday docker-run-close ecr-login docker-push docker-release tf-init tf-plan tf-apply prompt-validate prompt-publish prompt-promote prompt-active run-task-open
+.PHONY: docker-build docker-run-open docker-run-midday docker-run-close ecr-login docker-push docker-release tf-init tf-plan tf-apply prompt-validate prompt-publish prompt-promote prompt-active run-task-open test lint local-run-all
+
+test:
+	$(PYTHON) -m unittest discover
+
+lint:
+	$(PYTHON) -m compileall -q app scripts tests
+
+local-run-all:
+	$(PYTHON) -m app.main --slot open --weather all
 
 docker-build:
 	docker build --platform $(DOCKER_PLATFORM) -t $(APP_NAME):$(IMAGE_TAG) .
