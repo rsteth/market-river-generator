@@ -7,6 +7,7 @@ from pathlib import Path
 from app.contracts import (
     FailureMetadata,
     InstrumentSnapshot,
+    ManifestItem,
     MarketSnapshot,
     MarketSummary,
     PipelineRunArtifact,
@@ -16,7 +17,7 @@ from app.contracts import (
 from app.image_model import GeneratedImage
 from app.pipeline import PipelineDependencies, run_pipeline
 from app.prompts import PromptResult, PromptTemplate, sha256_text
-from app.publish import PublishResult, PublishedObject
+from app.publish import PublishResult, PublishedObject, StagedPublishResult
 from tests.helpers import make_settings
 
 
@@ -45,6 +46,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual([metadata.weather for metadata in publisher.successes], ["sunny", "rainy"])
             self.assertEqual([artifact.status for artifact in publisher.pipeline_runs], ["started", "succeeded"])
             self.assertLess(publisher.events.index("pipeline:started"), publisher.events.index("image:base123-sunny"))
+            self.assertGreater(publisher.events.index("manifest"), publisher.events.index("stage:base123-rainy"))
 
     def test_run_pipeline_publishes_failure_metadata_when_stage_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -146,13 +148,35 @@ class FakePublisher:
         image_content_type: str | None,
         image_format: str | None,
     ) -> PublishResult:
+        staged = self.stage_success(
+            metadata=metadata,
+            image_path=image_path,
+            image_content_type=image_content_type,
+            image_format=image_format,
+        )
+        latest = self.publish_latest_manifest([staged.manifest_item], updated_at=metadata.created_at)
+        return PublishResult(image=staged.image, metadata=staged.metadata, latest=latest)
+
+    def stage_success(
+        self,
+        *,
+        metadata: RunMetadata,
+        image_path: Path | None,
+        image_content_type: str | None,
+        image_format: str | None,
+    ) -> StagedPublishResult:
         self.successes.append(metadata)
         run_id = metadata.run_id
-        return PublishResult(
+        self.events.append(f"stage:{run_id}")
+        return StagedPublishResult(
             image=PublishedObject(key=f"images/{run_id}.svg", url=f"https://example.test/images/{run_id}.svg"),
             metadata=PublishedObject(key=f"metadata/{run_id}.json", url=f"https://example.test/metadata/{run_id}.json"),
-            latest=PublishedObject(key="manifests/latest.json", url="https://example.test/manifests/latest.json"),
+            manifest_item=metadata_to_manifest_item(metadata),
         )
+
+    def publish_latest_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
+        self.events.append("manifest")
+        return PublishedObject(key="manifests/latest.json", url="https://example.test/manifests/latest.json")
 
     def publish_failure(self, metadata: FailureMetadata) -> PublishedObject:
         self.failures.append(metadata)
@@ -165,6 +189,14 @@ class FakePublisher:
             key=f"pipeline-runs/{artifact.run_id}.json",
             url=f"https://example.test/pipeline-runs/{artifact.run_id}.json",
         )
+
+
+def metadata_to_manifest_item(metadata: RunMetadata) -> ManifestItem:
+    return ManifestItem.from_run_metadata(
+        metadata,
+        image_url=f"https://example.test/images/{metadata.run_id}.svg",
+        metadata_url=f"https://example.test/metadata/{metadata.run_id}.json",
+    )
 
 
 if __name__ == "__main__":

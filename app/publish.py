@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 
 from app.config import Settings
 from app.contracts import FailureMetadata, ManifestItem, PipelineRunArtifact, RunMetadata
-from app.manifest import update_latest_manifest
+from app.manifest import update_latest_manifest_items
 
 
 LATEST_KEY = "manifests/latest.json"
@@ -30,6 +30,13 @@ class PublishResult:
     latest: PublishedObject
 
 
+@dataclass(frozen=True)
+class StagedPublishResult:
+    image: PublishedObject | None
+    metadata: PublishedObject
+    manifest_item: ManifestItem
+
+
 class Publisher:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -43,6 +50,23 @@ class Publisher:
         image_content_type: str | None,
         image_format: str | None,
     ) -> PublishResult:
+        staged = self.stage_success(
+            metadata=metadata,
+            image_path=image_path,
+            image_content_type=image_content_type,
+            image_format=image_format,
+        )
+        latest = self.publish_latest_manifest([staged.manifest_item], updated_at=metadata.created_at)
+        return PublishResult(image=staged.image, metadata=staged.metadata, latest=latest)
+
+    def stage_success(
+        self,
+        *,
+        metadata: RunMetadata,
+        image_path: Path | None,
+        image_content_type: str | None,
+        image_format: str | None,
+    ) -> StagedPublishResult:
         slot = metadata.slot
         created_at = metadata.created_at
         date_path = _date_path(created_at)
@@ -59,10 +83,12 @@ class Publisher:
         metadata_obj = self.upload_json(metadata.to_dict(), metadata_key)
 
         manifest_item = ManifestItem.from_run_metadata(metadata, image_url=image_obj.url if image_obj else None, metadata_url=metadata_obj.url)
+        return StagedPublishResult(image=image_obj, metadata=metadata_obj, manifest_item=manifest_item)
+
+    def publish_latest_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
         existing = self.read_json(LATEST_KEY)
-        latest = update_latest_manifest(existing, manifest_item, updated_at=metadata.created_at)
-        latest_obj = self.upload_json(latest, LATEST_KEY)
-        return PublishResult(image=image_obj, metadata=metadata_obj, latest=latest_obj)
+        latest = update_latest_manifest_items(existing, items, updated_at=updated_at)
+        return self.upload_json(latest, LATEST_KEY)
 
     def publish_failure(self, metadata: FailureMetadata | dict[str, Any]) -> PublishedObject:
         payload = metadata.to_dict() if isinstance(metadata, FailureMetadata) else metadata

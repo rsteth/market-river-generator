@@ -8,14 +8,14 @@ from time import perf_counter
 from typing import Callable, Protocol
 
 from app.config import Settings
-from app.contracts import FailureMetadata, MarketSnapshot, PipelineRunArtifact, RunMetadata, RunRequest
+from app.contracts import FailureMetadata, ManifestItem, MarketSnapshot, PipelineRunArtifact, RunMetadata, RunRequest
 from app.image_model import GeneratedImage, ImageProvider, get_image_provider
 from app.logging_utils import get_logger
 from app.market import fetch_market_snapshot
 from app.metadata import failure_metadata, model_metadata, pipeline_run_artifact, success_metadata
 from app.prompt_registry import load_active_prompt_template
 from app.prompts import PromptTemplate, compose_prompt
-from app.publish import PublishResult, Publisher
+from app.publish import PublishedObject, Publisher, StagedPublishResult
 from app.state import derive_visual_state
 
 
@@ -40,7 +40,20 @@ class PublisherProtocol(Protocol):
         image_path: Path | None,
         image_content_type: str | None,
         image_format: str | None,
-    ) -> PublishResult:
+    ) -> object:
+        ...
+
+    def stage_success(
+        self,
+        *,
+        metadata: RunMetadata,
+        image_path: Path | None,
+        image_content_type: str | None,
+        image_format: str | None,
+    ) -> StagedPublishResult:
+        ...
+
+    def publish_latest_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
         ...
 
     def publish_failure(self, metadata: FailureMetadata) -> object:
@@ -141,7 +154,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
             model=model,
         )
         dependencies.publisher.publish_pipeline_run(audit_artifact)
-        published: list[PublishedVariant] = []
+        staged_variants: list[tuple[str, str, StagedPublishResult]] = []
 
         for weather_condition in request.weather_conditions:
             variant_run_id = _variant_run_id(run_id, weather_condition, request.weather_conditions)
@@ -172,26 +185,17 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                 model=model,
             )
             publish_started = perf_counter()
-            publish_result = _publish_success(dependencies.publisher, metadata, image)
+            staged = _stage_success(dependencies.publisher, metadata, image)
             publish_ms = _elapsed_ms(publish_started)
-            published.append(
-                PublishedVariant(
-                    weather=weather_condition,
-                    run_id=variant_run_id,
-                    image_key=publish_result.image.key if publish_result.image else None,
-                    metadata_key=publish_result.metadata.key,
-                    latest_key=publish_result.latest.key,
-                )
-            )
+            staged_variants.append((weather_condition, variant_run_id, staged))
             logger.info(
-                "published run",
+                "staged run artifacts",
                 extra={
                     "_run_id": variant_run_id,
                     "_slot": slot,
                     "_weather": weather_condition,
                     "_provider": dependencies.image_provider.name,
-                    "_metadata_key": publish_result.metadata.key,
-                    "_latest_key": publish_result.latest.key,
+                    "_metadata_key": staged.metadata.key,
                     "_market_fetch_ms": market_fetch_ms,
                     "_prompt_load_ms": prompt_load_ms,
                     "_prompt_compose_ms": prompt_compose_ms,
@@ -199,13 +203,40 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                     "_publish_ms": publish_ms,
                 },
             )
+        manifest_publish_started = perf_counter()
+        latest = dependencies.publisher.publish_latest_manifest(
+            [staged.manifest_item for _, _, staged in staged_variants],
+            updated_at=created_at,
+        )
+        manifest_publish_ms = _elapsed_ms(manifest_publish_started)
+        published = tuple(
+            PublishedVariant(
+                weather=weather_condition,
+                run_id=variant_run_id,
+                image_key=staged.image.key if staged.image else None,
+                metadata_key=staged.metadata.key,
+                latest_key=latest.key,
+            )
+            for weather_condition, variant_run_id, staged in staged_variants
+        )
+        logger.info(
+            "published latest manifest",
+            extra={
+                "_run_id": run_id,
+                "_slot": slot,
+                "_provider": dependencies.image_provider.name,
+                "_weather": ",".join(request.weather_conditions),
+                "_latest_key": latest.key,
+                "_manifest_publish_ms": manifest_publish_ms,
+            },
+        )
         dependencies.publisher.publish_pipeline_run(audit_artifact.with_status("succeeded"))
         return RunResult(
             run_id=run_id,
             slot=slot,
             created_at=created_at,
             succeeded=True,
-            variants=tuple(published),
+            variants=published,
         )
 
     except Exception as exc:
@@ -232,8 +263,8 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
         )
 
 
-def _publish_success(publisher: PublisherProtocol, metadata: RunMetadata, image: GeneratedImage) -> PublishResult:
-    return publisher.publish_success(
+def _stage_success(publisher: PublisherProtocol, metadata: RunMetadata, image: GeneratedImage) -> StagedPublishResult:
+    return publisher.stage_success(
         metadata=metadata,
         image_path=image.path,
         image_content_type=image.content_type,
