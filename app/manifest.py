@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.contracts import ManifestItem
+
 
 SLOT_ORDER = {"open": 0, "midday": 1, "close": 2}
 WEATHER_ORDER = {"sunny": 0, "cloudy": 1, "rainy": 2}
@@ -9,13 +11,14 @@ WEATHER_ORDER = {"sunny": 0, "cloudy": 1, "rainy": 2}
 
 def update_latest_manifest(
     existing: dict[str, Any] | None,
-    item: dict[str, Any],
+    item: ManifestItem | dict[str, Any],
     updated_at: str,
 ) -> dict[str, Any]:
+    item_payload = item.to_dict() if isinstance(item, ManifestItem) else item
     items = []
     if existing and isinstance(existing.get("items"), list):
-        items = [old for old in existing["items"] if not _same_manifest_slot(old, item)]
-    items.append(item)
+        items = [old for old in existing["items"] if not _same_manifest_slot(old, item_payload)]
+    items.append(item_payload)
     items.sort(
         key=lambda value: (
             value.get("date", ""),

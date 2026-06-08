@@ -5,6 +5,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from app.contracts import (
+    CityState,
+    MarketSnapshot,
+    MarketSummary,
+    ModelMetadata,
+    PromptMetadata,
+    RiverState,
+    RunMetadata,
+    TimeOfDayState,
+    VisualState,
+    WeatherState,
+)
 from app.publish import LATEST_KEY, Publisher
 from tests.helpers import make_settings
 
@@ -31,38 +43,47 @@ class PublishTests(unittest.TestCase):
             self.assertEqual(latest["items"][0]["market_mood"], "flat")
 
 
-def _metadata(run_id: str, weather: str) -> dict[str, object]:
-    return {
-        "id": f"2026-01-02-open-{run_id}",
-        "run_id": run_id,
-        "slot": "open",
-        "weather": weather,
-        "created_at": "2026-01-02T10:00:00Z",
-        "market_snapshot": {},
-        "derived_state": {
-            "market_mood": "flat",
-            "volatility_mood": "stable",
-            "weather": {"condition": weather},
-            "time_of_day": {"slot": "open"},
-            "river": {"speed": "slow", "depth": "steady"},
-            "city": {"lighting": "muted"},
-        },
-        "caption": "a sunny morning",
-        "prompt": {
-            "id": "river_city",
-            "template_version": "test",
-            "source": "test",
-            "template_sha256": "abc",
-            "template_s3_key": None,
-            "active_s3_key": None,
-            "positive": "positive",
-            "negative": "negative",
-            "provider": "provider",
-            "hash": "hash",
-        },
-        "model": {"provider": "mock", "parameters": {}},
-        "outputs": {},
-    }
+def _metadata(run_id: str, weather: str) -> RunMetadata:
+    return RunMetadata(
+        id=f"2026-01-02-open-{run_id}",
+        run_id=run_id,
+        slot="open",
+        weather=weather,
+        created_at="2026-01-02T10:00:00Z",
+        market_snapshot=MarketSnapshot(
+            as_of="2026-01-02T10:00:00Z",
+            source="test",
+            instruments={},
+            summary=MarketSummary(
+                spy_change_pct=None,
+                qqq_change_pct=None,
+                vix_change_pct=None,
+                avg_risk_change_pct=None,
+            ),
+        ),
+        derived_state=VisualState(
+            market_mood="flat",
+            volatility_mood="stable",
+            weather=WeatherState(condition=weather),
+            time_of_day=TimeOfDayState(slot="open"),
+            river=RiverState(speed="slow", depth="steady", surface="quiet", color="blue"),
+            city=CityState(lighting="muted", mood="still"),
+        ),
+        caption="a sunny morning",
+        prompt=PromptMetadata(
+            id="river_city",
+            template_version="test",
+            source="test",
+            template_sha256="abc",
+            template_s3_key=None,
+            active_s3_key=None,
+            positive="positive",
+            negative="negative",
+            provider="provider",
+            hash="hash",
+        ),
+        model=ModelMetadata(provider="mock", parameters={}),
+    )
 
 
 if __name__ == "__main__":

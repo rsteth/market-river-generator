@@ -18,14 +18,14 @@ class StateTests(unittest.TestCase):
         for avg_risk, expected in cases:
             with self.subTest(avg_risk=avg_risk):
                 state = derive_visual_state(_snapshot(avg_risk, 0), weather_condition="sunny", slot="open")
-                self.assertEqual(state["market_mood"], expected)
+                self.assertEqual(state.market_mood, expected)
 
     def test_volatility_mood_thresholds(self) -> None:
         cases = [(5.01, "rising"), (5.0, "stable"), (-5.0, "stable"), (-5.01, "falling")]
         for vix_change, expected in cases:
             with self.subTest(vix_change=vix_change):
                 state = derive_visual_state(_snapshot(0, vix_change), weather_condition="sunny", slot="open")
-                self.assertEqual(state["volatility_mood"], expected)
+                self.assertEqual(state.volatility_mood, expected)
 
     def test_caption_uses_weather_and_slot(self) -> None:
         state = derive_visual_state(_snapshot(0, 0), weather_condition="rainy", slot="close")

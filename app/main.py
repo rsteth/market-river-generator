@@ -5,16 +5,16 @@ import hashlib
 import sys
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 
 from dotenv import load_dotenv
 
-from app.config import Settings, VALID_SLOTS, VALID_WEATHER_CONDITIONS, resolve_slot, resolve_weather_conditions
+from app.config import Settings, VALID_SLOTS, VALID_WEATHER_CONDITIONS, resolve_run_request
+from app.contracts import FailureMetadata, MarketSnapshot, ModelMetadata, PromptMetadata, RunMetadata, VisualState
 from app.image_model import get_image_provider, provider_prompt
 from app.logging_utils import configure_logging, get_logger
 from app.market import fetch_market_snapshot
 from app.prompt_registry import load_active_prompt_template
-from app.prompts import compose_prompt
+from app.prompts import PromptResult, compose_prompt
 from app.publish import Publisher
 from app.state import caption_for_state, derive_visual_state
 
@@ -33,15 +33,15 @@ def main(argv: list[str] | None = None) -> int:
     created_at = _utc_now()
 
     try:
-        slot = resolve_slot(args.slot)
-        weather_conditions = resolve_weather_conditions(args.weather)
+        request = resolve_run_request(args.slot, args.weather)
+        slot = request.slot
         logger.info(
             "starting run",
             extra={
                 "_run_id": run_id,
                 "_slot": slot,
                 "_provider": settings.image_provider,
-                "_weather": ",".join(weather_conditions),
+                "_weather": ",".join(request.weather_conditions),
             },
         )
 
@@ -51,8 +51,8 @@ def main(argv: list[str] | None = None) -> int:
         publisher = Publisher(settings)
         model = _model_metadata(settings, image_provider.name)
 
-        for weather_condition in weather_conditions:
-            variant_run_id = _variant_run_id(run_id, weather_condition, weather_conditions)
+        for weather_condition in request.weather_conditions:
+            variant_run_id = _variant_run_id(run_id, weather_condition, request.weather_conditions)
             visual_state = derive_visual_state(market_snapshot, weather_condition=weather_condition, slot=slot)
             prompt = compose_prompt(visual_state, template=prompt_template)
             image = image_provider.generate_image(
@@ -60,8 +60,8 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=variant_run_id,
                 output_dir=settings.output_dir / "generated",
                 slot=slot,
-                market_mood=visual_state["market_mood"],
-                volatility_mood=visual_state["volatility_mood"],
+                market_mood=visual_state.market_mood,
+                volatility_mood=visual_state.volatility_mood,
             )
 
             metadata = _success_metadata(
@@ -112,43 +112,42 @@ def _success_metadata(
     run_id: str,
     slot: str,
     created_at: str,
-    market_snapshot: dict[str, Any],
-    visual_state: dict[str, Any],
-    prompt: Any,
-    model: dict[str, Any],
-) -> dict[str, Any]:
+    market_snapshot: MarketSnapshot,
+    visual_state: VisualState,
+    prompt: PromptResult,
+    model: ModelMetadata,
+) -> RunMetadata:
     rendered_prompt = provider_prompt(prompt)
-    return {
-        "id": f"{created_at[:10]}-{slot}-{run_id}",
-        "run_id": run_id,
-        "slot": slot,
-        "weather": visual_state["weather"]["condition"],
-        "created_at": created_at,
-        "market_snapshot": market_snapshot,
-        "derived_state": visual_state,
-        "caption": caption_for_state(visual_state),
-        "prompt": {
-            "id": prompt.prompt_id,
-            "template_version": prompt.template_version,
-            "source": prompt.source,
-            "template_sha256": prompt.template_sha256,
-            "template_s3_key": prompt.template_s3_key,
-            "active_s3_key": prompt.active_s3_key,
-            "positive": prompt.positive_prompt,
-            "negative": prompt.negative_prompt,
-            "provider": rendered_prompt,
-            "hash": _sha256(rendered_prompt),
-        },
-        "model": model,
-        "outputs": {},
-    }
+    return RunMetadata(
+        id=f"{created_at[:10]}-{slot}-{run_id}",
+        run_id=run_id,
+        slot=slot,
+        weather=visual_state.weather.condition,
+        created_at=created_at,
+        market_snapshot=market_snapshot,
+        derived_state=visual_state,
+        caption=caption_for_state(visual_state),
+        prompt=PromptMetadata(
+            id=prompt.prompt_id,
+            template_version=prompt.template_version,
+            source=prompt.source,
+            template_sha256=prompt.template_sha256,
+            template_s3_key=prompt.template_s3_key,
+            active_s3_key=prompt.active_s3_key,
+            positive=prompt.positive_prompt,
+            negative=prompt.negative_prompt,
+            provider=rendered_prompt,
+            hash=_sha256(rendered_prompt),
+        ),
+        model=model,
+    )
 
 
-def _model_metadata(settings: Settings, provider: str) -> dict[str, Any]:
+def _model_metadata(settings: Settings, provider: str) -> ModelMetadata:
     if provider == "fal":
-        return {
-            "provider": provider,
-            "parameters": {
+        return ModelMetadata(
+            provider=provider,
+            parameters={
                 "model": settings.fal_model,
                 "image_size": settings.fal_image_size,
                 "output_format": settings.fal_output_format,
@@ -156,9 +155,9 @@ def _model_metadata(settings: Settings, provider: str) -> dict[str, Any]:
                 "acceleration": settings.fal_acceleration,
                 "enable_safety_checker": settings.fal_enable_safety_checker,
             },
-        }
+        )
     if provider == "replicate":
-        parameters: dict[str, Any] = {
+        parameters = {
             "model": settings.replicate_model,
             "aspect_ratio": settings.replicate_aspect_ratio,
             "resolution": settings.replicate_resolution,
@@ -168,30 +167,29 @@ def _model_metadata(settings: Settings, provider: str) -> dict[str, Any]:
         }
         if settings.replicate_seed is not None:
             parameters["seed"] = settings.replicate_seed
-        return {"provider": provider, "parameters": parameters}
-    return {"provider": provider, "parameters": {}}
+        return ModelMetadata(provider=provider, parameters=parameters)
+    return ModelMetadata(provider=provider, parameters={})
 
 
 def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _variant_run_id(base_run_id: str, weather_condition: str, weather_conditions: list[str]) -> str:
+def _variant_run_id(base_run_id: str, weather_condition: str, weather_conditions: tuple[str, ...]) -> str:
     if len(weather_conditions) == 1:
         return base_run_id
     return f"{base_run_id}-{weather_condition}"
 
 
-def _failure_metadata(run_id: str, slot: str, created_at: str, exc: Exception) -> dict[str, Any]:
-    return {
-        "id": f"{created_at[:10]}-{slot}-{run_id}-failure",
-        "run_id": run_id,
-        "slot": slot,
-        "created_at": created_at,
-        "status": "failed",
-        "error": {"type": exc.__class__.__name__, "message": str(exc)},
-        "outputs": {},
-    }
+def _failure_metadata(run_id: str, slot: str, created_at: str, exc: Exception) -> FailureMetadata:
+    return FailureMetadata(
+        id=f"{created_at[:10]}-{slot}-{run_id}-failure",
+        run_id=run_id,
+        slot=slot,
+        created_at=created_at,
+        error_type=exc.__class__.__name__,
+        error_message=str(exc),
+    )
 
 
 def _utc_now() -> str:

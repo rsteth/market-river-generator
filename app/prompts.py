@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
+from app.contracts import VisualState
 
 PROMPT_ID = "river_city"
 TEMPLATE_VERSION = "river_city_v0.2"
@@ -134,11 +135,12 @@ def bundled_prompt_template(template_path: Path = DEFAULT_TEMPLATE_PATH) -> Prom
     )
 
 
-def compose_prompt(state: dict[str, Any], template: PromptTemplate | None = None) -> PromptResult:
+def compose_prompt(state: VisualState | Mapping[str, Any], template: PromptTemplate | None = None) -> PromptResult:
+    state_payload = state.to_dict() if isinstance(state, VisualState) else state
     prompt_template = template or bundled_prompt_template()
-    weather = _weather_snippet(state)
-    time_of_day = TIME_OF_DAY_SNIPPETS[_time_of_day(state)]
-    market_condition = MARKET_CONDITION_SNIPPETS[_market_condition(state)]
+    weather = _weather_snippet(state_payload)
+    time_of_day = TIME_OF_DAY_SNIPPETS[_time_of_day(state_payload)]
+    market_condition = MARKET_CONDITION_SNIPPETS[_market_condition(state_payload)]
     positive = prompt_template.text.format(
         weather=weather,
         time_of_day=time_of_day,

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
+
+from app.contracts import CityState, MarketSnapshot, RiverState, VisualState, WeatherState, TimeOfDayState
 
 
-def derive_visual_state(snapshot: dict[str, Any], weather_condition: str = "sunny", slot: str = "open") -> dict[str, Any]:
-    summary = snapshot.get("summary", {})
-    avg_risk = summary.get("avg_risk_change_pct")
-    vix_change = summary.get("vix_change_pct")
+def derive_visual_state(snapshot: MarketSnapshot | Mapping[str, Any], weather_condition: str = "sunny", slot: str = "open") -> VisualState:
+    typed_snapshot = snapshot if isinstance(snapshot, MarketSnapshot) else MarketSnapshot.from_mapping(snapshot)
+    avg_risk = typed_snapshot.summary.avg_risk_change_pct
+    vix_change = typed_snapshot.summary.vix_change_pct
 
     market_mood = _market_mood(avg_risk)
     volatility_mood = _volatility_mood(vix_change)
@@ -16,27 +18,28 @@ def derive_visual_state(snapshot: dict[str, Any], weather_condition: str = "sunn
 
     city = _city_for_market(market_mood)
 
-    return {
-        "market_mood": market_mood,
-        "volatility_mood": volatility_mood,
-        "weather": {"condition": weather_condition},
-        "time_of_day": {"slot": slot},
-        "river": river,
-        "city": city,
-    }
+    return VisualState(
+        market_mood=market_mood,
+        volatility_mood=volatility_mood,
+        weather=WeatherState(condition=weather_condition),
+        time_of_day=TimeOfDayState(slot=slot),
+        river=RiverState.from_mapping(river),
+        city=CityState.from_mapping(city),
+    )
 
 
-def caption_for_state(state: dict[str, Any]) -> str:
-    river = state["river"]
-    city = state["city"]
+def caption_for_state(state: VisualState | Mapping[str, Any]) -> str:
+    typed_state = state if isinstance(state, VisualState) else VisualState.from_mapping(state)
+    river = typed_state.river
+    city = typed_state.city
     opening = _caption_opening(state)
-    return f"{opening}. a {river['speed']}, {river['depth']} river under {city['lighting']} city light"
+    return f"{opening}. a {river.speed}, {river.depth} river under {city.lighting} city light"
 
 
-def _caption_opening(state: dict[str, Any]) -> str:
-    weather = state.get("weather", {}).get("condition", "sunny")
-    time_of_day = state.get("time_of_day")
-    slot = time_of_day.get("slot") if isinstance(time_of_day, dict) else time_of_day
+def _caption_opening(state: VisualState | Mapping[str, Any]) -> str:
+    typed_state = state if isinstance(state, VisualState) else VisualState.from_mapping(state)
+    weather = typed_state.weather.condition
+    slot = typed_state.time_of_day.slot
     normalized_slot = str(slot or "open").strip().lower()
     if normalized_slot == "close":
         weather_label = "clear" if weather == "sunny" else weather

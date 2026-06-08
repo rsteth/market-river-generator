@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.contracts import RunRequest
+
 
 VALID_SLOTS = {"open", "midday", "close"}
 WEATHER_VARIANT_ORDER = ("sunny", "cloudy", "rainy")
@@ -152,3 +154,10 @@ def resolve_weather_conditions(cli_weather: str | None) -> list[str]:
         valid = ", ".join([*WEATHER_VARIANT_ORDER, "all"])
         raise ValueError(f"weather condition must be one of: {valid}")
     return [normalized]
+
+
+def resolve_run_request(cli_slot: str | None, cli_weather: str | None) -> RunRequest:
+    return RunRequest(
+        slot=resolve_slot(cli_slot),
+        weather_conditions=tuple(resolve_weather_conditions(cli_weather)),
+    )
