@@ -32,6 +32,13 @@ WEATHER_SNIPPETS = {
         "background. The city layout remains readable and centered."
     ),
 }
+WINTER_RAINY_WEATHER_SNIPPET = (
+    "Winter precipitation contained within the floating city-disc, with localized snow clouds and visible snowfall, "
+    "sleet, and freezing mist over the city and mountain. Snow accumulation increases on "
+    "rooftops, terraces, bridge edges, riverbanks, and the upper mountain, while dark open river channels, exposed "
+    "stone, glass, and streets pick up cold wet reflections. Mist gathers only around the mountain and icy waterfall, "
+    "fading before it reaches the white background. The city layout remains readable and centered."
+)
 TIME_OF_DAY_SNIPPETS = {
     "open": (
         "Early morning atmosphere localized to the floating world, with low warm light entering from one side of the "
@@ -129,7 +136,7 @@ def bundled_prompt_template(template_path: Path = DEFAULT_TEMPLATE_PATH) -> Prom
 
 def compose_prompt(state: dict[str, Any], template: PromptTemplate | None = None) -> PromptResult:
     prompt_template = template or bundled_prompt_template()
-    weather = WEATHER_SNIPPETS[_weather_condition(state)]
+    weather = _weather_snippet(state)
     time_of_day = TIME_OF_DAY_SNIPPETS[_time_of_day(state)]
     market_condition = MARKET_CONDITION_SNIPPETS[_market_condition(state)]
     positive = prompt_template.text.format(
@@ -163,6 +170,13 @@ def _weather_condition(state: dict[str, Any]) -> str:
         valid = ", ".join(sorted(WEATHER_SNIPPETS))
         raise ValueError(f"weather condition must be one of: {valid}")
     return condition
+
+
+def _weather_snippet(state: dict[str, Any]) -> str:
+    condition = _weather_condition(state)
+    if condition == "rainy" and _market_condition(state) in {"risk_off", "strong_risk_off"}:
+        return WINTER_RAINY_WEATHER_SNIPPET
+    return WEATHER_SNIPPETS[condition]
 
 
 def _market_condition(state: dict[str, Any]) -> str:

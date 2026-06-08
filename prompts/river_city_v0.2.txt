@@ -4,7 +4,7 @@ The composition is centered, isolated, and self-contained: all terrain, architec
 
 {weather}
 
-All weather, clouds, mist, rain, haze, light beams, shadows, and atmospheric effects are localized to the floating world and remain in the centre of the image visually attached to the disc, mountain, city, river, or waterfall. The surrounding background stays pure white and empty, with no sky, horizon, distant landscape, or atmospheric spill beyond the floating world.
+All weather, clouds, mist, rain, snow, sleet, haze, light beams, shadows, and atmospheric effects are localized to the floating world and remain in the centre of the image visually attached to the disc, mountain, city, river, or waterfall. The surrounding background stays pure white and empty, with no sky, horizon, distant landscape, or atmospheric spill beyond the floating world.
 
 The weather describes local atmospheric conditions only; the following time of day controls the overall illumination.
 
