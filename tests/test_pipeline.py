@@ -9,6 +9,7 @@ from app.contracts import (
     InstrumentSnapshot,
     MarketSnapshot,
     MarketSummary,
+    PipelineRunArtifact,
     RunMetadata,
     RunRequest,
 )
@@ -34,6 +35,7 @@ class PipelineTests(unittest.TestCase):
                 now=lambda: "2026-01-02T10:00:00Z",
                 new_run_id=lambda: "base123",
             )
+            image_provider.events = publisher.events
 
             result = run_pipeline(RunRequest(slot="open", weather_conditions=("sunny", "rainy")), deps)
 
@@ -41,6 +43,8 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual([variant.run_id for variant in result.variants], ["base123-sunny", "base123-rainy"])
             self.assertEqual([call["run_id"] for call in image_provider.calls], ["base123-sunny", "base123-rainy"])
             self.assertEqual([metadata.weather for metadata in publisher.successes], ["sunny", "rainy"])
+            self.assertEqual([artifact.status for artifact in publisher.pipeline_runs], ["started", "succeeded"])
+            self.assertLess(publisher.events.index("pipeline:started"), publisher.events.index("image:base123-sunny"))
 
     def test_run_pipeline_publishes_failure_metadata_when_stage_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -61,6 +65,7 @@ class PipelineTests(unittest.TestCase):
 
             self.assertFalse(result.succeeded)
             self.assertEqual(result.error_type, "RuntimeError")
+            self.assertEqual(publisher.pipeline_runs, [])
             self.assertEqual(publisher.failures[0].slot, "midday")
             self.assertEqual(publisher.failures[0].run_id, "base123")
 
@@ -107,6 +112,7 @@ class FakeImageProvider:
     def __init__(self, root: Path):
         self.root = root
         self.calls: list[dict[str, str]] = []
+        self.events: list[str] | None = None
 
     def generate_image(
         self,
@@ -118,6 +124,8 @@ class FakeImageProvider:
         volatility_mood: str,
     ) -> GeneratedImage:
         self.calls.append({"run_id": run_id, "slot": slot, "market_mood": market_mood})
+        if self.events is not None:
+            self.events.append(f"image:{run_id}")
         path = self.root / f"{run_id}.svg"
         path.write_text("<svg></svg>", encoding="utf-8")
         return GeneratedImage(provider=self.name, path=path, content_type="image/svg+xml", format="svg")
@@ -127,6 +135,8 @@ class FakePublisher:
     def __init__(self) -> None:
         self.successes: list[RunMetadata] = []
         self.failures: list[FailureMetadata] = []
+        self.pipeline_runs: list[PipelineRunArtifact] = []
+        self.events: list[str] = []
 
     def publish_success(
         self,
@@ -147,6 +157,14 @@ class FakePublisher:
     def publish_failure(self, metadata: FailureMetadata) -> PublishedObject:
         self.failures.append(metadata)
         return PublishedObject(key=f"failures/{metadata.run_id}.json", url=f"https://example.test/failures/{metadata.run_id}.json")
+
+    def publish_pipeline_run(self, artifact: PipelineRunArtifact) -> PublishedObject:
+        self.pipeline_runs.append(artifact)
+        self.events.append(f"pipeline:{artifact.status}")
+        return PublishedObject(
+            key=f"pipeline-runs/{artifact.run_id}.json",
+            url=f"https://example.test/pipeline-runs/{artifact.run_id}.json",
+        )
 
 
 if __name__ == "__main__":

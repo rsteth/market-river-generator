@@ -274,6 +274,58 @@ class FailureMetadata:
 
 
 @dataclass(frozen=True)
+class PipelineRunArtifact:
+    id: str
+    run_id: str
+    slot: str
+    weather_conditions: tuple[str, ...]
+    created_at: str
+    status: str
+    market_snapshot: MarketSnapshot
+    prompt_id: str
+    prompt_version: str
+    prompt_source: str
+    prompt_template_sha256: str | None
+    prompt_template_s3_key: str | None
+    prompt_active_s3_key: str | None
+    model: ModelMetadata
+    error_type: str | None = None
+    error_message: str | None = None
+
+    def with_status(
+        self,
+        status: str,
+        *,
+        error_type: str | None = None,
+        error_message: str | None = None,
+    ) -> "PipelineRunArtifact":
+        return replace(self, status=status, error_type=error_type, error_message=error_message)
+
+    def to_dict(self) -> JsonDict:
+        payload: JsonDict = {
+            "id": self.id,
+            "run_id": self.run_id,
+            "slot": self.slot,
+            "weather_conditions": list(self.weather_conditions),
+            "created_at": self.created_at,
+            "status": self.status,
+            "market_snapshot": self.market_snapshot.to_dict(),
+            "prompt": {
+                "id": self.prompt_id,
+                "template_version": self.prompt_version,
+                "source": self.prompt_source,
+                "template_sha256": self.prompt_template_sha256,
+                "template_s3_key": self.prompt_template_s3_key,
+                "active_s3_key": self.prompt_active_s3_key,
+            },
+            "model": self.model.to_dict(),
+        }
+        if self.error_type or self.error_message:
+            payload["error"] = {"type": self.error_type, "message": self.error_message}
+        return payload
+
+
+@dataclass(frozen=True)
 class ManifestPrompt:
     id: str
     template_version: str

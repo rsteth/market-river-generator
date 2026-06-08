@@ -10,7 +10,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from app.config import Settings
-from app.contracts import FailureMetadata, ManifestItem, RunMetadata
+from app.contracts import FailureMetadata, ManifestItem, PipelineRunArtifact, RunMetadata
 from app.manifest import update_latest_manifest
 
 
@@ -70,6 +70,11 @@ class Publisher:
         date_path = _date_path(created_at)
         key = f"failures/{date_path}/{payload['slot']}-{payload['run_id']}.json"
         return self.upload_json(payload, key)
+
+    def publish_pipeline_run(self, artifact: PipelineRunArtifact) -> PublishedObject:
+        date_path = _date_path(artifact.created_at)
+        key = f"pipeline-runs/{date_path}/{artifact.slot}-{artifact.run_id}.json"
+        return self.upload_json(artifact.to_dict(), key)
 
     def upload_file(self, source: Path, key: str, content_type: str) -> PublishedObject:
         if self._s3:

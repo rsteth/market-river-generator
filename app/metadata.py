@@ -3,9 +3,18 @@ from __future__ import annotations
 import hashlib
 
 from app.config import Settings
-from app.contracts import FailureMetadata, MarketSnapshot, ModelMetadata, PromptMetadata, RunMetadata, VisualState
+from app.contracts import (
+    FailureMetadata,
+    MarketSnapshot,
+    ModelMetadata,
+    PipelineRunArtifact,
+    PromptMetadata,
+    RunMetadata,
+    RunRequest,
+    VisualState,
+)
 from app.image_model import provider_prompt
-from app.prompts import PromptResult
+from app.prompts import PromptResult, PromptTemplate
 from app.state import caption_for_state
 
 
@@ -53,6 +62,33 @@ def failure_metadata(run_id: str, slot: str, created_at: str, exc: Exception) ->
         created_at=created_at,
         error_type=exc.__class__.__name__,
         error_message=str(exc),
+    )
+
+
+def pipeline_run_artifact(
+    *,
+    run_id: str,
+    created_at: str,
+    request: RunRequest,
+    market_snapshot: MarketSnapshot,
+    prompt_template: PromptTemplate,
+    model: ModelMetadata,
+) -> PipelineRunArtifact:
+    return PipelineRunArtifact(
+        id=f"{created_at[:10]}-{request.slot}-{run_id}-pipeline",
+        run_id=run_id,
+        slot=request.slot,
+        weather_conditions=request.weather_conditions,
+        created_at=created_at,
+        status="started",
+        market_snapshot=market_snapshot,
+        prompt_id=prompt_template.prompt_id,
+        prompt_version=prompt_template.version,
+        prompt_source=prompt_template.source,
+        prompt_template_sha256=prompt_template.sha256,
+        prompt_template_s3_key=prompt_template.template_s3_key,
+        prompt_active_s3_key=prompt_template.active_s3_key,
+        model=model,
     )
 
 

@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from app.config import Settings
-from app.contracts import FailureMetadata, MarketSnapshot, RunMetadata, RunRequest
+from app.contracts import FailureMetadata, MarketSnapshot, PipelineRunArtifact, RunMetadata, RunRequest
 from app.image_model import GeneratedImage, ImageProvider, get_image_provider
 from app.logging_utils import get_logger
 from app.market import fetch_market_snapshot
-from app.metadata import failure_metadata, model_metadata, success_metadata
+from app.metadata import failure_metadata, model_metadata, pipeline_run_artifact, success_metadata
 from app.prompt_registry import load_active_prompt_template
 from app.prompts import PromptTemplate, compose_prompt
 from app.publish import PublishResult, Publisher
@@ -43,6 +43,9 @@ class PublisherProtocol(Protocol):
         ...
 
     def publish_failure(self, metadata: FailureMetadata) -> object:
+        ...
+
+    def publish_pipeline_run(self, artifact: PipelineRunArtifact) -> object:
         ...
 
 
@@ -106,6 +109,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
     run_id = dependencies.new_run_id()
     created_at = dependencies.now()
     slot = request.slot
+    audit_artifact: PipelineRunArtifact | None = None
 
     try:
         logger.info(
@@ -121,6 +125,15 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
         market_snapshot = dependencies.market_data.fetch_snapshot()
         prompt_template = dependencies.prompt_templates.load_template()
         model = model_metadata(dependencies.settings, dependencies.image_provider.name)
+        audit_artifact = pipeline_run_artifact(
+            run_id=run_id,
+            created_at=created_at,
+            request=request,
+            market_snapshot=market_snapshot,
+            prompt_template=prompt_template,
+            model=model,
+        )
+        dependencies.publisher.publish_pipeline_run(audit_artifact)
         published: list[PublishedVariant] = []
 
         for weather_condition in request.weather_conditions:
@@ -165,6 +178,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                     "_latest_key": publish_result.latest.key,
                 },
             )
+        dependencies.publisher.publish_pipeline_run(audit_artifact.with_status("succeeded"))
         return RunResult(
             run_id=run_id,
             slot=slot,
@@ -176,6 +190,14 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
     except Exception as exc:
         logger.exception("run failed", extra={"_run_id": run_id, "_slot": slot})
         try:
+            if audit_artifact is not None:
+                dependencies.publisher.publish_pipeline_run(
+                    audit_artifact.with_status(
+                        "failed",
+                        error_type=exc.__class__.__name__,
+                        error_message=str(exc),
+                    )
+                )
             dependencies.publisher.publish_failure(failure_metadata(run_id, slot, created_at, exc))
         except Exception:
             logger.exception("failed to publish failure metadata", extra={"_run_id": run_id, "_slot": slot})
