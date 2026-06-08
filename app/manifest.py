@@ -42,7 +42,7 @@ def update_latest_manifest_items(
 
 
 def _same_manifest_slot(old: dict[str, Any], new: dict[str, Any]) -> bool:
-    if old.get("date") != new.get("date") or old.get("slot") != new.get("slot"):
+    if old.get("slot") != new.get("slot"):
         return False
     new_weather = new.get("weather")
     old_weather = old.get("weather")
