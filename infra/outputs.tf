@@ -38,8 +38,20 @@ output "scheduler_names" {
   value       = { for slot, schedule in aws_scheduler_schedule.market_slots : slot => schedule.name }
 }
 
+output "cloudwatch_log_group_name" {
+  description = "CloudWatch log group for ECS task stdout/stderr."
+  value       = aws_cloudwatch_log_group.app.name
+}
+
+output "cloudwatch_alarm_names" {
+  description = "CloudWatch alarms created for run failures and missing slot successes."
+  value = {
+    run_failures         = try(aws_cloudwatch_metric_alarm.run_failures[0].alarm_name, null)
+    missing_slot_success = { for slot, alarm in aws_cloudwatch_metric_alarm.missing_slot_success : slot => alarm.alarm_name }
+  }
+}
+
 output "latest_manifest_url" {
   description = "Default S3 URL for latest.json. Use PUBLIC_BASE_URL if configured."
   value       = var.public_base_url != "" ? "${trim(var.public_base_url, "/")}/manifests/latest.json" : "https://${aws_s3_bucket.assets.bucket}.s3.${var.aws_region}.amazonaws.com/manifests/latest.json"
 }
-

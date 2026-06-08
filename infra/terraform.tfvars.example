@@ -6,3 +6,8 @@ replicate_aspect_ratio = "1:1"
 
 prompt_active_key = "prompts/river_city/active.json"
 allow_bundled_prompt_fallback = false
+market_data_max_age_hours = 120
+
+# Optional SNS topic ARNs for CloudWatch alarm notifications.
+alarm_actions = []
+ok_actions = []

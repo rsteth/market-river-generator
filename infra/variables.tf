@@ -141,6 +141,12 @@ variable "allow_bundled_prompt_fallback" {
   default     = false
 }
 
+variable "market_data_max_age_hours" {
+  description = "Maximum age in hours for usable SPY/QQQ market data."
+  type        = number
+  default     = 120
+}
+
 variable "public_base_url" {
   description = "Optional public URL prefix for S3 objects, such as a CloudFront distribution URL."
   type        = string
@@ -192,6 +198,30 @@ variable "log_retention_days" {
   description = "CloudWatch log retention in days."
   type        = number
   default     = 7
+}
+
+variable "enable_cloudwatch_alarms" {
+  description = "Create CloudWatch alarms for failed runs and missing per-slot success logs."
+  type        = bool
+  default     = true
+}
+
+variable "alarm_actions" {
+  description = "SNS topic ARNs or other alarm action ARNs to notify when observability alarms enter ALARM."
+  type        = list(string)
+  default     = []
+}
+
+variable "ok_actions" {
+  description = "SNS topic ARNs or other alarm action ARNs to notify when observability alarms return to OK."
+  type        = list(string)
+  default     = []
+}
+
+variable "missing_slot_alarm_period_seconds" {
+  description = "Lookback window for per-slot missing-success alarms. Defaults to 72 hours to avoid weekend-only noise."
+  type        = number
+  default     = 259200
 }
 
 variable "vpc_id" {

@@ -33,7 +33,7 @@ resource "aws_scheduler_schedule" "market_slots" {
           name = local.container_name
           environment = [
             {
-              name  = "TASK_INPUT_JSON"
+              name = "TASK_INPUT_JSON"
               value = jsonencode({
                 slot           = each.key
                 schedule_name  = "${var.app_name}-${each.key}"

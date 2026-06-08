@@ -112,6 +112,10 @@ resource "aws_ecs_task_definition" "app" {
           value = tostring(var.allow_bundled_prompt_fallback)
         },
         {
+          name  = "MARKET_DATA_MAX_AGE_HOURS"
+          value = tostring(var.market_data_max_age_hours)
+        },
+        {
           name  = "LOG_LEVEL"
           value = "INFO"
         },

@@ -291,6 +291,13 @@ aws logs describe-log-streams --log-group-name /ecs/market-river-generator --ord
 aws logs tail /ecs/market-river-generator --follow
 ```
 
+Logs are JSON and include run correlation fields such as `run_id`, `slot`, `weather`, `provider`, `schedule_name`,
+`schedule_slot`, and, on ECS, `ecs_task_arn`. Pipeline stage logs include timings such as `market_fetch_ms`,
+`prompt_load_ms`, `prompt_compose_ms`, `image_generation_ms`, `publish_ms`, and `manifest_publish_ms`.
+
+Terraform creates CloudWatch metric filters for error logs and per-slot successful manifest publishes. Set
+`alarm_actions` to SNS topic ARNs to receive notifications for failed runs or missing per-slot success logs.
+
 ## S3 Layout
 
 Successful runs:
@@ -298,6 +305,7 @@ Successful runs:
 ```text
 images/YYYY/MM/DD/{slot}-{run_id}.{svg|jpg|png|webp}
 metadata/YYYY/MM/DD/{slot}-{run_id}.json
+pipeline-runs/YYYY/MM/DD/{slot}-{run_id}.json
 manifests/latest.json
 prompts/river_city/active.json
 prompts/river_city/versions/{version}.txt

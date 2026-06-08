@@ -67,6 +67,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "assets" {
   }
 
   rule {
+    id     = "expire-pipeline-run-records"
+    status = "Enabled"
+
+    filter {
+      prefix = "pipeline-runs/"
+    }
+
+    expiration {
+      days = var.generated_artifact_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_retention_days
+    }
+  }
+
+  rule {
     id     = "expire-old-manifest-versions"
     status = "Enabled"
 
