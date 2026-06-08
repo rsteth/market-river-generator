@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -8,22 +7,15 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from app.config import Settings
-from app.contracts import (
-    FailureMetadata,
-    MarketSnapshot,
-    ModelMetadata,
-    PromptMetadata,
-    RunMetadata,
-    RunRequest,
-    VisualState,
-)
-from app.image_model import GeneratedImage, ImageProvider, get_image_provider, provider_prompt
+from app.contracts import FailureMetadata, MarketSnapshot, RunMetadata, RunRequest
+from app.image_model import GeneratedImage, ImageProvider, get_image_provider
 from app.logging_utils import get_logger
 from app.market import fetch_market_snapshot
+from app.metadata import failure_metadata, model_metadata, success_metadata
 from app.prompt_registry import load_active_prompt_template
-from app.prompts import PromptResult, PromptTemplate, compose_prompt
+from app.prompts import PromptTemplate, compose_prompt
 from app.publish import PublishResult, Publisher
-from app.state import caption_for_state, derive_visual_state
+from app.state import derive_visual_state
 
 
 logger = get_logger(__name__)
@@ -128,7 +120,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
 
         market_snapshot = dependencies.market_data.fetch_snapshot()
         prompt_template = dependencies.prompt_templates.load_template()
-        model = _model_metadata(dependencies.settings, dependencies.image_provider.name)
+        model = model_metadata(dependencies.settings, dependencies.image_provider.name)
         published: list[PublishedVariant] = []
 
         for weather_condition in request.weather_conditions:
@@ -144,7 +136,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                 volatility_mood=visual_state.volatility_mood,
             )
 
-            metadata = _success_metadata(
+            metadata = success_metadata(
                 run_id=variant_run_id,
                 slot=slot,
                 created_at=created_at,
@@ -184,7 +176,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
     except Exception as exc:
         logger.exception("run failed", extra={"_run_id": run_id, "_slot": slot})
         try:
-            dependencies.publisher.publish_failure(_failure_metadata(run_id, slot, created_at, exc))
+            dependencies.publisher.publish_failure(failure_metadata(run_id, slot, created_at, exc))
         except Exception:
             logger.exception("failed to publish failure metadata", extra={"_run_id": run_id, "_slot": slot})
         return RunResult(
@@ -206,89 +198,10 @@ def _publish_success(publisher: PublisherProtocol, metadata: RunMetadata, image:
     )
 
 
-def _success_metadata(
-    *,
-    run_id: str,
-    slot: str,
-    created_at: str,
-    market_snapshot: MarketSnapshot,
-    visual_state: VisualState,
-    prompt: PromptResult,
-    model: ModelMetadata,
-) -> RunMetadata:
-    rendered_prompt = provider_prompt(prompt)
-    return RunMetadata(
-        id=f"{created_at[:10]}-{slot}-{run_id}",
-        run_id=run_id,
-        slot=slot,
-        weather=visual_state.weather.condition,
-        created_at=created_at,
-        market_snapshot=market_snapshot,
-        derived_state=visual_state,
-        caption=caption_for_state(visual_state),
-        prompt=PromptMetadata(
-            id=prompt.prompt_id,
-            template_version=prompt.template_version,
-            source=prompt.source,
-            template_sha256=prompt.template_sha256,
-            template_s3_key=prompt.template_s3_key,
-            active_s3_key=prompt.active_s3_key,
-            positive=prompt.positive_prompt,
-            negative=prompt.negative_prompt,
-            provider=rendered_prompt,
-            hash=_sha256(rendered_prompt),
-        ),
-        model=model,
-    )
-
-
-def _model_metadata(settings: Settings, provider: str) -> ModelMetadata:
-    if provider == "fal":
-        return ModelMetadata(
-            provider=provider,
-            parameters={
-                "model": settings.fal_model,
-                "image_size": settings.fal_image_size,
-                "output_format": settings.fal_output_format,
-                "num_inference_steps": settings.fal_num_inference_steps,
-                "acceleration": settings.fal_acceleration,
-                "enable_safety_checker": settings.fal_enable_safety_checker,
-            },
-        )
-    if provider == "replicate":
-        parameters = {
-            "model": settings.replicate_model,
-            "aspect_ratio": settings.replicate_aspect_ratio,
-            "resolution": settings.replicate_resolution,
-            "output_format": settings.replicate_output_format,
-            "output_quality": settings.replicate_output_quality,
-            "safety_tolerance": settings.replicate_safety_tolerance,
-        }
-        if settings.replicate_seed is not None:
-            parameters["seed"] = settings.replicate_seed
-        return ModelMetadata(provider=provider, parameters=parameters)
-    return ModelMetadata(provider=provider, parameters={})
-
-
 def _variant_run_id(base_run_id: str, weather_condition: str, weather_conditions: tuple[str, ...]) -> str:
     if len(weather_conditions) == 1:
         return base_run_id
     return f"{base_run_id}-{weather_condition}"
-
-
-def _failure_metadata(run_id: str, slot: str, created_at: str, exc: Exception) -> FailureMetadata:
-    return FailureMetadata(
-        id=f"{created_at[:10]}-{slot}-{run_id}-failure",
-        run_id=run_id,
-        slot=slot,
-        created_at=created_at,
-        error_type=exc.__class__.__name__,
-        error_message=str(exc),
-    )
-
-
-def _sha256(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _new_run_id() -> str:
