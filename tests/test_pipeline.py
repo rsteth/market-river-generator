@@ -15,13 +15,23 @@ from app.contracts import (
     RunRequest,
 )
 from app.image_model import GeneratedImage
-from app.pipeline import PipelineDependencies, run_pipeline
+from app.pipeline import PipelineDependencies, deterministic_run_id, run_pipeline
 from app.prompts import PromptResult, PromptTemplate, sha256_text
 from app.publish import PublishResult, PublishedObject, StagedPublishResult
 from tests.helpers import make_settings
 
 
 class PipelineTests(unittest.TestCase):
+    def test_deterministic_run_id_uses_date_slot_and_weather(self) -> None:
+        request = RunRequest(slot="open", weather_conditions=("sunny", "rainy"))
+
+        first = deterministic_run_id(request, "2026-01-02T10:00:00Z")
+        second = deterministic_run_id(request, "2026-01-02T20:00:00Z")
+        different_weather = deterministic_run_id(RunRequest(slot="open", weather_conditions=("sunny",)), "2026-01-02T10:00:00Z")
+
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, different_weather)
+
     def test_run_pipeline_uses_injected_dependencies_for_each_weather_variant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -34,7 +44,7 @@ class PipelineTests(unittest.TestCase):
                 image_provider=image_provider,
                 publisher=publisher,
                 now=lambda: "2026-01-02T10:00:00Z",
-                new_run_id=lambda: "base123",
+                new_run_id=lambda request, created_at: "base123",
             )
             image_provider.events = publisher.events
 
@@ -59,7 +69,7 @@ class PipelineTests(unittest.TestCase):
                 image_provider=FakeImageProvider(root),
                 publisher=publisher,
                 now=lambda: "2026-01-02T10:00:00Z",
-                new_run_id=lambda: "base123",
+                new_run_id=lambda request, created_at: "base123",
             )
 
             with self.assertLogs("app.pipeline", level="ERROR"):

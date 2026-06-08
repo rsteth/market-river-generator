@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 from app.config import Settings
 from app.contracts import FailureMetadata, ManifestItem, PipelineRunArtifact, RunMetadata
 from app.manifest import update_latest_manifest_items
+from app.retry import retry_call
 
 
 LATEST_KEY = "manifests/latest.json"
@@ -104,11 +105,14 @@ class Publisher:
 
     def upload_file(self, source: Path, key: str, content_type: str) -> PublishedObject:
         if self._s3:
-            self._s3.upload_file(
-                str(source),
-                self.settings.s3_bucket,
-                key,
-                ExtraArgs={"ContentType": content_type},
+            retry_call(
+                "s3 upload file",
+                lambda: self._s3.upload_file(
+                    str(source),
+                    self.settings.s3_bucket,
+                    key,
+                    ExtraArgs={"ContentType": content_type},
+                ),
             )
         else:
             destination = self.settings.output_dir / "published" / key
@@ -119,11 +123,14 @@ class Publisher:
     def upload_json(self, payload: dict[str, Any], key: str) -> PublishedObject:
         body = json.dumps(payload, indent=2, sort_keys=True, default=str).encode("utf-8")
         if self._s3:
-            self._s3.put_object(
-                Bucket=self.settings.s3_bucket,
-                Key=key,
-                Body=body,
-                ContentType="application/json",
+            retry_call(
+                "s3 put json",
+                lambda: self._s3.put_object(
+                    Bucket=self.settings.s3_bucket,
+                    Key=key,
+                    Body=body,
+                    ContentType="application/json",
+                ),
             )
         else:
             destination = self.settings.output_dir / "published" / key

@@ -9,6 +9,7 @@ from typing import Protocol
 
 from app.config import Settings
 from app.prompts import PromptResult
+from app.retry import retry_call
 
 
 @dataclass(frozen=True)
@@ -110,17 +111,20 @@ class FalImageProvider:
         import fal_client
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        result = fal_client.subscribe(
-            self.model,
-            arguments={
-                "prompt": _fal_prompt(prompt_result),
-                "image_size": self.image_size,
-                "num_inference_steps": self.num_inference_steps,
-                "num_images": 1,
-                "enable_safety_checker": self.enable_safety_checker,
-                "output_format": self.output_format,
-                "acceleration": self.acceleration,
-            },
+        result = retry_call(
+            "fal image generation",
+            lambda: fal_client.subscribe(
+                self.model,
+                arguments={
+                    "prompt": _fal_prompt(prompt_result),
+                    "image_size": self.image_size,
+                    "num_inference_steps": self.num_inference_steps,
+                    "num_images": 1,
+                    "enable_safety_checker": self.enable_safety_checker,
+                    "output_format": self.output_format,
+                    "acceleration": self.acceleration,
+                },
+            ),
         )
         image = _first_fal_image(result)
         url = image["url"]
@@ -166,7 +170,7 @@ class ReplicateImageProvider:
         if self.seed is not None:
             request_input["seed"] = self.seed
 
-        result = replicate.run(self.model, input=request_input)
+        result = retry_call("replicate image generation", lambda: replicate.run(self.model, input=request_input))
         content_type = _content_type_for_format(self.output_format)
         image_format = _format_for_content_type(content_type, self.output_format)
         path = output_dir / f"{slot}-{run_id}.{image_format}"
@@ -216,9 +220,12 @@ def _first_fal_image(result: object) -> dict[str, str]:
 def _download_image(url: str, path: Path) -> None:
     import requests
 
-    with requests.get(url, timeout=120) as response:
-        response.raise_for_status()
-        path.write_bytes(response.content)
+    def download() -> None:
+        with requests.get(url, timeout=120) as response:
+            response.raise_for_status()
+            path.write_bytes(response.content)
+
+    retry_call("image download", download)
 
 
 def _write_replicate_output(result: object, path: Path) -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import uuid
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -71,7 +71,7 @@ class PipelineDependencies:
     image_provider: ImageProvider
     publisher: PublisherProtocol
     now: Callable[[], str]
-    new_run_id: Callable[[], str]
+    new_run_id: Callable[[RunRequest, str], str]
 
 
 @dataclass(frozen=True)
@@ -115,13 +115,13 @@ def default_dependencies(settings: Settings) -> PipelineDependencies:
         image_provider=get_image_provider(settings),
         publisher=Publisher(settings),
         now=_utc_now,
-        new_run_id=_new_run_id,
+        new_run_id=deterministic_run_id,
     )
 
 
 def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> RunResult:
-    run_id = dependencies.new_run_id()
     created_at = dependencies.now()
+    run_id = dependencies.new_run_id(request, created_at)
     slot = request.slot
     audit_artifact: PipelineRunArtifact | None = None
 
@@ -278,8 +278,10 @@ def _variant_run_id(base_run_id: str, weather_condition: str, weather_conditions
     return f"{base_run_id}-{weather_condition}"
 
 
-def _new_run_id() -> str:
-    return uuid.uuid4().hex[:12]
+def deterministic_run_id(request: RunRequest, created_at: str) -> str:
+    date = created_at[:10]
+    weather = ",".join(request.weather_conditions)
+    return hashlib.sha256(f"{date}:{request.slot}:{weather}".encode("utf-8")).hexdigest()[:12]
 
 
 def _elapsed_ms(started_at: float) -> int:
