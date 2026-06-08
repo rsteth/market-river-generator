@@ -12,6 +12,10 @@ from app.contracts import RunRequest
 VALID_SLOTS = {"open", "midday", "close"}
 WEATHER_VARIANT_ORDER = ("sunny", "cloudy", "rainy")
 VALID_WEATHER_CONDITIONS = set(WEATHER_VARIANT_ORDER)
+VALID_IMAGE_PROVIDERS = {"mock", "none", "future", "fal", "replicate"}
+VALID_FAL_OUTPUT_FORMATS = {"jpeg", "png"}
+VALID_FAL_ACCELERATIONS = {"none", "regular", "high"}
+VALID_REPLICATE_OUTPUT_FORMATS = {"webp", "jpg", "jpeg", "png"}
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,28 @@ class Settings:
     allow_bundled_prompt_fallback: bool
     output_dir: Path
     log_level: str
+
+    def __post_init__(self) -> None:
+        _require_non_empty("APP_NAME", self.app_name)
+        _require_non_empty("AWS_REGION", self.aws_region)
+        _require_one_of("IMAGE_PROVIDER", self.image_provider, VALID_IMAGE_PROVIDERS)
+        _require_non_empty("PROMPT_ACTIVE_KEY", self.prompt_active_key)
+        _require_non_empty("LOG_LEVEL", self.log_level)
+
+        _require_one_of("FAL_OUTPUT_FORMAT", self.fal_output_format, VALID_FAL_OUTPUT_FORMATS)
+        _require_one_of("FAL_ACCELERATION", self.fal_acceleration, VALID_FAL_ACCELERATIONS)
+        _require_range("FAL_NUM_INFERENCE_STEPS", self.fal_num_inference_steps, minimum=1, maximum=50)
+
+        _require_one_of("REPLICATE_OUTPUT_FORMAT", self.replicate_output_format, VALID_REPLICATE_OUTPUT_FORMATS)
+        _require_range("REPLICATE_OUTPUT_QUALITY", self.replicate_output_quality, minimum=1, maximum=100)
+        _require_range("REPLICATE_SAFETY_TOLERANCE", self.replicate_safety_tolerance, minimum=1, maximum=6)
+        if self.replicate_seed is not None:
+            _require_range("REPLICATE_SEED", self.replicate_seed, minimum=0)
+
+        if self.image_provider == "fal":
+            _require_env("FAL_KEY")
+        if self.image_provider == "replicate":
+            _require_env("REPLICATE_API_TOKEN")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -108,6 +134,28 @@ def _bool_from_env(name: str, *, default: bool) -> bool:
     if normalized in {"0", "false", "no", "n", "off"}:
         return False
     raise ValueError(f"{name} must be a boolean")
+
+
+def _require_non_empty(name: str, value: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty string")
+
+
+def _require_one_of(name: str, value: str, valid: set[str]) -> None:
+    if value not in valid:
+        raise ValueError(f"{name} must be one of: {', '.join(sorted(valid))}")
+
+
+def _require_range(name: str, value: int, *, minimum: int, maximum: int | None = None) -> None:
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be at most {maximum}")
+
+
+def _require_env(name: str) -> None:
+    if not os.getenv(name, "").strip():
+        raise ValueError(f"{name} is required for the selected IMAGE_PROVIDER")
 
 
 def parse_task_input_json(raw: str | None = None) -> dict[str, Any]:
