@@ -25,6 +25,12 @@ class PublishedObject:
 
 
 @dataclass(frozen=True)
+class VersionedJson:
+    payload: dict[str, Any] | None
+    etag: str | None = None
+
+
+@dataclass(frozen=True)
 class PublishResult:
     image: PublishedObject | None
     metadata: PublishedObject
@@ -87,8 +93,15 @@ class Publisher:
         return StagedPublishResult(image=image_obj, metadata=metadata_obj, manifest_item=manifest_item)
 
     def publish_latest_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
-        existing = self.read_json(LATEST_KEY)
-        latest = update_latest_manifest_items(existing, items, updated_at=updated_at)
+        existing = self.read_json_with_version(LATEST_KEY)
+        latest = update_latest_manifest_items(existing.payload, items, updated_at=updated_at)
+        if self._s3:
+            return self.upload_json(
+                latest,
+                LATEST_KEY,
+                if_match=existing.etag,
+                if_none_match="*" if existing.etag is None else None,
+            )
         return self.upload_json(latest, LATEST_KEY)
 
     def publish_failure(self, metadata: FailureMetadata | dict[str, Any]) -> PublishedObject:
@@ -120,17 +133,29 @@ class Publisher:
             destination.write_bytes(source.read_bytes())
         return PublishedObject(key=key, url=self.url_for_key(key))
 
-    def upload_json(self, payload: dict[str, Any], key: str) -> PublishedObject:
+    def upload_json(
+        self,
+        payload: dict[str, Any],
+        key: str,
+        *,
+        if_match: str | None = None,
+        if_none_match: str | None = None,
+    ) -> PublishedObject:
         body = json.dumps(payload, indent=2, sort_keys=True, default=str).encode("utf-8")
         if self._s3:
+            put_args: dict[str, Any] = {
+                "Bucket": self.settings.s3_bucket,
+                "Key": key,
+                "Body": body,
+                "ContentType": "application/json",
+            }
+            if if_match is not None:
+                put_args["IfMatch"] = if_match
+            if if_none_match is not None:
+                put_args["IfNoneMatch"] = if_none_match
             retry_call(
                 "s3 put json",
-                lambda: self._s3.put_object(
-                    Bucket=self.settings.s3_bucket,
-                    Key=key,
-                    Body=body,
-                    ContentType="application/json",
-                ),
+                lambda: self._s3.put_object(**put_args),
             )
         else:
             destination = self.settings.output_dir / "published" / key
@@ -139,19 +164,25 @@ class Publisher:
         return PublishedObject(key=key, url=self.url_for_key(key))
 
     def read_json(self, key: str) -> dict[str, Any] | None:
+        return self.read_json_with_version(key).payload
+
+    def read_json_with_version(self, key: str) -> VersionedJson:
         if self._s3:
             try:
                 response = self._s3.get_object(Bucket=self.settings.s3_bucket, Key=key)
             except ClientError as exc:
                 if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
-                    return None
+                    return VersionedJson(payload=None)
                 raise
-            return json.loads(response["Body"].read())
+            return VersionedJson(
+                payload=json.loads(response["Body"].read()),
+                etag=response.get("ETag"),
+            )
 
         source = self.settings.output_dir / "published" / key
         if not source.exists():
-            return None
-        return json.loads(source.read_text(encoding="utf-8"))
+            return VersionedJson(payload=None)
+        return VersionedJson(payload=json.loads(source.read_text(encoding="utf-8")))
 
     def url_for_key(self, key: str) -> str:
         if self.settings.public_base_url:
