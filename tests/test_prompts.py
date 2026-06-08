@@ -27,22 +27,25 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Early morning atmosphere", result.positive_prompt)
         self.assertIn("constructive and open", result.positive_prompt)
 
-    def test_compose_prompt_rejects_unknown_placeholder(self) -> None:
-        template = PromptTemplate(
-            prompt_id="river_city",
-            version="test",
-            text="Unknown: {missing}",
-            source="test",
-            sha256=sha256_text("Unknown: {missing}"),
-        )
-        state = {
-            "market_mood": "flat",
-            "weather": {"condition": "sunny"},
-            "time_of_day": {"slot": "open"},
-        }
+    def test_prompt_template_rejects_unknown_placeholder(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown placeholders"):
+            PromptTemplate(
+                prompt_id="river_city",
+                version="test",
+                text="Weather: {weather}\nTime: {time_of_day}\nMarket: {market_condition}\nUnknown: {missing}",
+                source="test",
+                sha256=sha256_text("Unknown: {missing}"),
+            )
 
-        with self.assertRaises(KeyError):
-            compose_prompt(state, template=template)
+    def test_prompt_template_rejects_missing_placeholder(self) -> None:
+        with self.assertRaisesRegex(ValueError, "missing placeholders"):
+            PromptTemplate(
+                prompt_id="river_city",
+                version="test",
+                text="Weather: {weather}",
+                source="test",
+                sha256=sha256_text("Weather: {weather}"),
+            )
 
 
 if __name__ == "__main__":

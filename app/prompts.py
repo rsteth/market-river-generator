@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from string import Formatter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -12,6 +13,7 @@ TEMPLATE_VERSION = "river_city_v0.2"
 DEFAULT_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "prompts" / "river_city_v0.2.txt"
 NEGATIVE_PROMPT = "text, numbers, logos, stock charts, candlesticks, tickers, people in foreground"
 DEFAULT_WEATHER_CONDITION = "sunny"
+REQUIRED_TEMPLATE_FIELDS = {"weather", "time_of_day", "market_condition"}
 WEATHER_SNIPPETS = {
     "sunny": (
         "Clear dry weather localized only over the floating city-disc, with crisp visibility and clean air around the "
@@ -123,6 +125,9 @@ class PromptTemplate:
     template_s3_key: str | None = None
     active_s3_key: str | None = None
 
+    def __post_init__(self) -> None:
+        validate_template_placeholders(self.text)
+
 
 def bundled_prompt_template(template_path: Path = DEFAULT_TEMPLATE_PATH) -> PromptTemplate:
     text = template_path.read_text(encoding="utf-8")
@@ -160,6 +165,20 @@ def compose_prompt(state: VisualState | Mapping[str, Any], template: PromptTempl
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def validate_template_placeholders(text: str) -> None:
+    fields = {
+        field_name.split(".", 1)[0].split("[", 1)[0]
+        for _, field_name, _, _ in Formatter().parse(text)
+        if field_name
+    }
+    unknown = fields - REQUIRED_TEMPLATE_FIELDS
+    missing = REQUIRED_TEMPLATE_FIELDS - fields
+    if unknown:
+        raise ValueError(f"prompt template contains unknown placeholders: {', '.join(sorted(unknown))}")
+    if missing:
+        raise ValueError(f"prompt template is missing placeholders: {', '.join(sorted(missing))}")
 
 
 def _weather_condition(state: dict[str, Any]) -> str:
