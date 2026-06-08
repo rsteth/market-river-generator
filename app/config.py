@@ -40,6 +40,7 @@ class Settings:
     replicate_seed: int | None
     prompt_active_key: str
     allow_bundled_prompt_fallback: bool
+    market_data_max_age_hours: int
     output_dir: Path
     log_level: str
 
@@ -59,6 +60,7 @@ class Settings:
         _require_range("REPLICATE_SAFETY_TOLERANCE", self.replicate_safety_tolerance, minimum=1, maximum=6)
         if self.replicate_seed is not None:
             _require_range("REPLICATE_SEED", self.replicate_seed, minimum=0)
+        _require_range("MARKET_DATA_MAX_AGE_HOURS", self.market_data_max_age_hours, minimum=1, maximum=168)
 
         if self.image_provider == "fal":
             _require_env("FAL_KEY")
@@ -88,6 +90,7 @@ class Settings:
             replicate_seed=_optional_int_from_env("REPLICATE_SEED"),
             prompt_active_key=os.getenv("PROMPT_ACTIVE_KEY", "prompts/river_city/active.json").strip(),
             allow_bundled_prompt_fallback=_bool_from_env("ALLOW_BUNDLED_PROMPT_FALLBACK", default=False),
+            market_data_max_age_hours=_int_from_env("MARKET_DATA_MAX_AGE_HOURS", default=120),
             output_dir=Path(os.getenv("OUTPUT_DIR", "runs")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )

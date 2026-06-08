@@ -78,6 +78,7 @@ Environment variables:
 - `REPLICATE_SEED`: optional integer seed for reproducible generations
 - `PROMPT_ACTIVE_KEY`: S3 key for the active prompt pointer; defaults to `prompts/river_city/active.json`
 - `ALLOW_BUNDLED_PROMPT_FALLBACK`: defaults to `false`; when `S3_BUCKET` is set, keep this false so failed prompt registry loads fail closed
+- `MARKET_DATA_MAX_AGE_HOURS`: maximum age for usable SPY/QQQ daily data; defaults to `120`
 - `OUTPUT_DIR`: defaults to `runs` locally and `/tmp/market-river-generator` in Docker
 - `WEATHER_CONDITION`: `sunny`, `cloudy`, `rainy`, or `all`; defaults to `all`
 - `TASK_INPUT_JSON`: optional JSON input with `slot` and `weather`

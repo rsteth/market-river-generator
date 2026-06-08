@@ -95,8 +95,11 @@ class RunResult:
 
 
 class YFinanceMarketDataProvider:
+    def __init__(self, settings: Settings):
+        self.settings = settings
+
     def fetch_snapshot(self) -> MarketSnapshot:
-        return fetch_market_snapshot()
+        return fetch_market_snapshot(max_age_hours=self.settings.market_data_max_age_hours)
 
 
 class ActivePromptTemplateProvider:
@@ -110,7 +113,7 @@ class ActivePromptTemplateProvider:
 def default_dependencies(settings: Settings) -> PipelineDependencies:
     return PipelineDependencies(
         settings=settings,
-        market_data=YFinanceMarketDataProvider(),
+        market_data=YFinanceMarketDataProvider(settings),
         prompt_templates=ActivePromptTemplateProvider(settings),
         image_provider=get_image_provider(settings),
         publisher=Publisher(settings),

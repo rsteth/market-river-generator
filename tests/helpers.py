@@ -27,6 +27,7 @@ def make_settings(output_dir: Path, **overrides: object) -> Settings:
         "replicate_seed": None,
         "prompt_active_key": "prompts/river_city/active.json",
         "allow_bundled_prompt_fallback": False,
+        "market_data_max_age_hours": 120,
         "output_dir": output_dir,
         "log_level": "INFO",
     }

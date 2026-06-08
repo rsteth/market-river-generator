@@ -19,7 +19,7 @@ class MarketDataError(RuntimeError):
     pass
 
 
-def fetch_market_snapshot(tickers: list[str] | None = None) -> MarketSnapshot:
+def fetch_market_snapshot(tickers: list[str] | None = None, *, max_age_hours: int = 120) -> MarketSnapshot:
     symbols = tickers or TICKERS
     instruments: dict[str, InstrumentSnapshot] = {}
     errors: dict[str, str] = {}
@@ -42,12 +42,32 @@ def fetch_market_snapshot(tickers: list[str] | None = None) -> MarketSnapshot:
     )
     if not is_usable_snapshot(snapshot):
         raise MarketDataError("market snapshot does not contain usable SPY or QQQ data")
+    if not is_fresh_snapshot(snapshot, max_age_hours=max_age_hours):
+        raise MarketDataError(f"market snapshot is older than {max_age_hours} hours")
     return snapshot
 
 
 def is_usable_snapshot(snapshot: MarketSnapshot) -> bool:
     empty = InstrumentSnapshot(last=None, previous_close=None, change_pct=None)
     return any(_is_number(snapshot.instruments.get(ticker, empty).change_pct) for ticker in ("SPY", "QQQ"))
+
+
+def is_fresh_snapshot(
+    snapshot: MarketSnapshot,
+    *,
+    max_age_hours: int,
+    now: datetime | None = None,
+) -> bool:
+    current = now or datetime.now(timezone.utc)
+    for ticker in ("SPY", "QQQ"):
+        instrument = snapshot.instruments.get(ticker)
+        if instrument is None or not instrument.as_of:
+            continue
+        as_of = datetime.fromisoformat(instrument.as_of.replace("Z", "+00:00"))
+        age_hours = (current - as_of).total_seconds() / 3600
+        if age_hours <= max_age_hours:
+            return True
+    return False
 
 
 def _fetch_instrument(ticker: str) -> InstrumentSnapshot:
@@ -70,6 +90,7 @@ def _fetch_instrument(ticker: str) -> InstrumentSnapshot:
         last=_round_or_none(last),
         previous_close=_round_or_none(previous_close),
         change_pct=_round_or_none(change_pct),
+        as_of=_timestamp_to_utc_iso(close_series.index[-1]),
     )
 
 
@@ -100,3 +121,13 @@ def _round_or_none(value: float | None) -> float | None:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _timestamp_to_utc_iso(value: Any) -> str:
+    to_pydatetime = getattr(value, "to_pydatetime", None)
+    parsed = to_pydatetime() if callable(to_pydatetime) else value
+    if not isinstance(parsed, datetime):
+        parsed = datetime.fromisoformat(str(value))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")

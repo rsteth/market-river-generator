@@ -18,6 +18,7 @@ class InstrumentSnapshot:
     last: float | None
     previous_close: float | None
     change_pct: float | None
+    as_of: str | None = None
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "InstrumentSnapshot":
@@ -25,6 +26,7 @@ class InstrumentSnapshot:
             last=_optional_float(payload.get("last")),
             previous_close=_optional_float(payload.get("previous_close")),
             change_pct=_optional_float(payload.get("change_pct")),
+            as_of=_optional_str(payload.get("as_of")),
         )
 
     def to_dict(self) -> JsonDict:
@@ -32,6 +34,7 @@ class InstrumentSnapshot:
             "last": self.last,
             "previous_close": self.previous_close,
             "change_pct": self.change_pct,
+            "as_of": self.as_of,
         }
 
 
