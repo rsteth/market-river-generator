@@ -307,6 +307,7 @@ images/YYYY/MM/DD/{slot}-{run_id}.{svg|jpg|png|webp}
 metadata/YYYY/MM/DD/{slot}-{run_id}.json
 pipeline-runs/YYYY/MM/DD/{slot}-{run_id}.json
 manifests/latest.json
+manifests/recent.json
 prompts/river_city/active.json
 prompts/river_city/versions/{version}.txt
 ```
@@ -317,7 +318,9 @@ Failures:
 failures/YYYY/MM/DD/{slot}-{run_id}.json
 ```
 
-`latest.json` is updated only after image and metadata writes complete. Existing manifest items for other slots are preserved; the item for the same date, slot, and weather is replaced. New weather-aware items remove old legacy slot-only items for the same date and slot.
+`latest.json` is updated only after image and metadata writes complete. It is the current homepage feed: existing manifest items for other slots are preserved, and the item for the same slot and weather is replaced even if it is from an earlier date. New weather-aware items remove old legacy slot-only items for the same slot.
+
+`recent.json` is the multi-day feed for archive/about views. It replaces only the exact date, slot, and weather record, then retains the newest 9 snapshot groups where a snapshot group is one date plus one slot. Because each snapshot group can contain sunny, cloudy, and rainy variants, the feed can contain up to 27 raw records while representing 9 visible snapshots.
 
 Each manifest item includes the explicit `slot`, `weather`, `created_at`, `run_id`, image and metadata URLs, market moods, prompt registry metadata, the exact provider prompt, a SHA-256 `prompt.hash`, and selected model parameters. The linked metadata JSON also stores the separated positive and negative prompt fields, raw market snapshot, and derived visual state for deeper audits.
 

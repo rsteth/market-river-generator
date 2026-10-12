@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.manifest import update_latest_manifest
+from app.manifest import update_latest_manifest, update_recent_manifest_items
 
 
 def item(
@@ -52,6 +52,49 @@ class ManifestTests(unittest.TestCase):
                 ("open", "cloudy", "cloud"),
                 ("midday", "rainy", "rain"),
                 ("close", "sunny", "close"),
+            ],
+        )
+
+    def test_recent_manifest_replaces_same_date_slot_weather_only(self) -> None:
+        existing = {
+            "items": [
+                item("older", "open", "sunny", date="2026-01-01"),
+                item("same-date", "open", "sunny", date="2026-01-02"),
+            ]
+        }
+
+        updated = update_recent_manifest_items(
+            existing,
+            [item("new", "open", "sunny", date="2026-01-02")],
+            updated_at="now",
+        )
+
+        self.assertEqual([entry["run_id"] for entry in updated["items"]], ["new", "older"])
+
+    def test_recent_manifest_caps_by_snapshot_group_and_keeps_weather_variants(self) -> None:
+        existing = {
+            "items": [
+                item("old-open", "open", "sunny", date="2026-01-01"),
+                item("mid-sun", "midday", "sunny", date="2026-01-02"),
+                item("mid-rain", "midday", "rainy", date="2026-01-02"),
+                item("close", "close", "cloudy", date="2026-01-02"),
+            ]
+        }
+
+        updated = update_recent_manifest_items(
+            existing,
+            [item("new", "open", "sunny", date="2026-01-03")],
+            updated_at="now",
+            max_snapshot_groups=3,
+        )
+
+        self.assertEqual(
+            [(entry["date"], entry["slot"], entry["weather"], entry["run_id"]) for entry in updated["items"]],
+            [
+                ("2026-01-03", "open", "sunny", "new"),
+                ("2026-01-02", "close", "cloudy", "close"),
+                ("2026-01-02", "midday", "sunny", "mid-sun"),
+                ("2026-01-02", "midday", "rainy", "mid-rain"),
             ],
         )
 

@@ -21,7 +21,7 @@ from app.contracts import (
     WeatherState,
     ManifestItem,
 )
-from app.publish import LATEST_KEY, Publisher
+from app.publish import LATEST_KEY, RECENT_KEY, Publisher
 from tests.helpers import make_settings
 
 
@@ -43,8 +43,11 @@ class PublishTests(unittest.TestCase):
             self.assertTrue((root / "published" / result.image.key).exists())
             self.assertTrue((root / "published" / result.metadata.key).exists())
             latest = json.loads((root / "published" / LATEST_KEY).read_text(encoding="utf-8"))
+            recent = json.loads((root / "published" / RECENT_KEY).read_text(encoding="utf-8"))
             self.assertEqual(latest["items"][0]["run_id"], "run-1")
             self.assertEqual(latest["items"][0]["market_mood"], "flat")
+            self.assertEqual(recent["items"][0]["run_id"], "run-1")
+            self.assertEqual(recent["max_snapshot_groups"], 9)
 
     def test_s3_latest_manifest_uses_if_match_when_existing_manifest_has_etag(self) -> None:
         fake_s3 = FakeS3(existing_payload={"items": []}, etag='"abc123"')

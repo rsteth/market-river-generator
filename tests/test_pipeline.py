@@ -57,6 +57,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual([artifact.status for artifact in publisher.pipeline_runs], ["started", "succeeded"])
             self.assertLess(publisher.events.index("pipeline:started"), publisher.events.index("image:base123-sunny"))
             self.assertGreater(publisher.events.index("manifest"), publisher.events.index("stage:base123-rainy"))
+            self.assertGreater(publisher.events.index("recent-manifest"), publisher.events.index("manifest"))
 
     def test_run_pipeline_publishes_failure_metadata_when_stage_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -187,6 +188,10 @@ class FakePublisher:
     def publish_latest_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
         self.events.append("manifest")
         return PublishedObject(key="manifests/latest.json", url="https://example.test/manifests/latest.json")
+
+    def publish_recent_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
+        self.events.append("recent-manifest")
+        return PublishedObject(key="manifests/recent.json", url="https://example.test/manifests/recent.json")
 
     def publish_failure(self, metadata: FailureMetadata) -> PublishedObject:
         self.failures.append(metadata)

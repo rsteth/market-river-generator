@@ -11,11 +11,12 @@ from botocore.exceptions import ClientError
 
 from app.config import Settings
 from app.contracts import FailureMetadata, ManifestItem, PipelineRunArtifact, RunMetadata
-from app.manifest import update_latest_manifest_items
+from app.manifest import update_latest_manifest_items, update_recent_manifest_items
 from app.retry import retry_call
 
 
 LATEST_KEY = "manifests/latest.json"
+RECENT_KEY = "manifests/recent.json"
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ class Publisher:
             image_format=image_format,
         )
         latest = self.publish_latest_manifest([staged.manifest_item], updated_at=metadata.created_at)
+        self.publish_recent_manifest([staged.manifest_item], updated_at=metadata.created_at)
         return PublishResult(image=staged.image, metadata=staged.metadata, latest=latest)
 
     def stage_success(
@@ -103,6 +105,18 @@ class Publisher:
                 if_none_match="*" if existing.etag is None else None,
             )
         return self.upload_json(latest, LATEST_KEY)
+
+    def publish_recent_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
+        existing = self.read_json_with_version(RECENT_KEY)
+        recent = update_recent_manifest_items(existing.payload, items, updated_at=updated_at)
+        if self._s3:
+            return self.upload_json(
+                recent,
+                RECENT_KEY,
+                if_match=existing.etag,
+                if_none_match="*" if existing.etag is None else None,
+            )
+        return self.upload_json(recent, RECENT_KEY)
 
     def publish_failure(self, metadata: FailureMetadata | dict[str, Any]) -> PublishedObject:
         payload = metadata.to_dict() if isinstance(metadata, FailureMetadata) else metadata

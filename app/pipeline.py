@@ -56,6 +56,9 @@ class PublisherProtocol(Protocol):
     def publish_latest_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
         ...
 
+    def publish_recent_manifest(self, items: list[ManifestItem], *, updated_at: str) -> PublishedObject:
+        ...
+
     def publish_failure(self, metadata: FailureMetadata) -> object:
         ...
 
@@ -211,6 +214,10 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
             [staged.manifest_item for _, _, staged in staged_variants],
             updated_at=created_at,
         )
+        recent = dependencies.publisher.publish_recent_manifest(
+            [staged.manifest_item for _, _, staged in staged_variants],
+            updated_at=created_at,
+        )
         manifest_publish_ms = _elapsed_ms(manifest_publish_started)
         published = tuple(
             PublishedVariant(
@@ -230,6 +237,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                 "_provider": dependencies.image_provider.name,
                 "_weather": ",".join(request.weather_conditions),
                 "_latest_key": latest.key,
+                "_recent_key": recent.key,
                 "_manifest_publish_ms": manifest_publish_ms,
             },
         )
