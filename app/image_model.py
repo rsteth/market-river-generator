@@ -2,14 +2,22 @@ from __future__ import annotations
 
 import html
 import mimetypes
+import tempfile
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urljoin, urlsplit
 
 from app.config import Settings
 from app.prompts import PromptResult
 from app.retry import retry_call
+
+
+FAL_DOWNLOAD_DOMAINS = ("fal.media",)
+REPLICATE_DOWNLOAD_DOMAINS = ("replicate.delivery", "delivery.replicate.com")
+MAX_IMAGE_BYTES = 50 * 1024 * 1024
+MAX_IMAGE_REDIRECTS = 5
 
 
 @dataclass(frozen=True)
@@ -131,7 +139,7 @@ class FalImageProvider:
         content_type = image.get("content_type") or _content_type_for_format(self.output_format)
         image_format = _format_for_content_type(content_type, self.output_format)
         path = output_dir / f"{slot}-{run_id}.{image_format}"
-        _download_image(url, path)
+        _download_image(url, path, allowed_domains=FAL_DOWNLOAD_DOMAINS)
         return GeneratedImage(provider=self.name, path=path, content_type=content_type, format=image_format)
 
 
@@ -217,33 +225,65 @@ def _first_fal_image(result: object) -> dict[str, str]:
     return image
 
 
-def _download_image(url: str, path: Path) -> None:
+def _validate_download_url(url: str, allowed_domains: tuple[str, ...]) -> None:
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.port not in (None, 443)
+        or not any(host == domain or host.endswith(f".{domain}") for domain in allowed_domains)
+    ):
+        # Do not log URLs, which can contain temporary access tokens.
+        raise ValueError("Image download URL must use HTTPS on an approved provider domain")
+
+
+def _download_image(url: str, path: Path, *, allowed_domains: tuple[str, ...]) -> None:
     import requests
 
     def download() -> None:
-        with requests.get(url, timeout=120) as response:
-            response.raise_for_status()
-            path.write_bytes(response.content)
+        current_url = url
+        for redirect_count in range(MAX_IMAGE_REDIRECTS + 1):
+            _validate_download_url(current_url, allowed_domains)
+            with requests.get(current_url, timeout=120, stream=True, allow_redirects=False) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("Location")
+                    if not location or redirect_count == MAX_IMAGE_REDIRECTS:
+                        raise ValueError("Image download has an invalid or excessive redirect chain")
+                    current_url = urljoin(current_url, location)
+                    continue
+                response.raise_for_status()
+                content_length = response.headers.get("Content-Length")
+                if content_length is not None and int(content_length) > MAX_IMAGE_BYTES:
+                    raise ValueError("Image download exceeds the 50 MiB limit")
+                temporary_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as output:
+                        temporary_path = Path(output.name)
+                        total = 0
+                        for chunk in response.iter_content(chunk_size=64 * 1024):
+                            total += len(chunk)
+                            if total > MAX_IMAGE_BYTES:
+                                raise ValueError("Image download exceeds the 50 MiB limit")
+                            output.write(chunk)
+                    temporary_path.replace(path)
+                    return
+                finally:
+                    if temporary_path is not None:
+                        temporary_path.unlink(missing_ok=True)
 
     retry_call("image download", download)
 
 
 def _write_replicate_output(result: object, path: Path) -> None:
     output = _first_replicate_output(result)
-    read = getattr(output, "read", None)
-    if callable(read):
-        data = read()
-        if isinstance(data, str):
-            data = data.encode("utf-8")
-        path.write_bytes(data)
-        return
-
     url = _replicate_output_url(output)
     if url:
-        _download_image(url, path)
+        _download_image(url, path, allowed_domains=REPLICATE_DOWNLOAD_DOMAINS)
         return
 
-    raise ValueError("Replicate response did not include a readable file or URL")
+    raise ValueError("Replicate response did not include an image URL")
 
 
 def _first_replicate_output(result: object) -> object:
@@ -257,11 +297,10 @@ def _first_replicate_output(result: object) -> object:
 def _replicate_output_url(output: object) -> str | None:
     if isinstance(output, str):
         return output
-    url_method = getattr(output, "url", None)
-    if callable(url_method):
-        url = url_method()
-        return url if isinstance(url, str) else None
-    return None
+    url = getattr(output, "url", None)
+    if callable(url):
+        url = url()
+    return url if isinstance(url, str) else None
 
 
 def _content_type_for_format(output_format: str) -> str:

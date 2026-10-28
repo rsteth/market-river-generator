@@ -120,30 +120,52 @@ resource "aws_s3_bucket_cors_configuration" "assets" {
 }
 
 data "aws_iam_policy_document" "public_read" {
-  count = var.enable_public_read ? 1 : 0
-
   statement {
-    sid     = "PublicReadGeneratedObjects"
-    effect  = "Allow"
-    actions = ["s3:GetObject"]
-
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
     resources = [
-      "${aws_s3_bucket.assets.arn}/images/*",
-      "${aws_s3_bucket.assets.arn}/metadata/*",
-      "${aws_s3_bucket.assets.arn}/manifests/*",
+      aws_s3_bucket.assets.arn,
+      "${aws_s3_bucket.assets.arn}/*",
     ]
-
     principals {
       type        = "*"
       identifiers = ["*"]
     }
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.enable_public_read ? [1] : []
+    content {
+      sid     = "PublicReadGeneratedObjects"
+      effect  = "Allow"
+      actions = ["s3:GetObject"]
+      resources = [
+        "${aws_s3_bucket.assets.arn}/images/*",
+        "${aws_s3_bucket.assets.arn}/metadata/*",
+        "${aws_s3_bucket.assets.arn}/manifests/*",
+      ]
+      principals {
+        type        = "*"
+        identifiers = ["*"]
+      }
+    }
   }
 }
 
+moved {
+  from = aws_s3_bucket_policy.public_read[0]
+  to   = aws_s3_bucket_policy.public_read
+}
+
 resource "aws_s3_bucket_policy" "public_read" {
-  count  = var.enable_public_read ? 1 : 0
   bucket = aws_s3_bucket.assets.id
-  policy = data.aws_iam_policy_document.public_read[0].json
+  policy = data.aws_iam_policy_document.public_read.json
 
   depends_on = [aws_s3_bucket_public_access_block.assets]
 }

@@ -67,8 +67,13 @@ data "aws_iam_policy_document" "task_s3" {
       "${aws_s3_bucket.assets.arn}/manifests/*",
       "${aws_s3_bucket.assets.arn}/pipeline-runs/*",
       "${aws_s3_bucket.assets.arn}/failures/*",
-      "${aws_s3_bucket.assets.arn}/prompts/*",
     ]
+  }
+
+  statement {
+    sid       = "ReadPromptTemplates"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.assets.arn}/prompts/*"]
   }
 }
 

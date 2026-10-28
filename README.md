@@ -208,6 +208,23 @@ vpc_id            = "vpc-..."
 public_subnet_ids = ["subnet-...", "subnet-..."]
 ```
 
+## Security And Frontend Compatibility
+
+Security settings preserve public GET/HEAD access and CORS for `images/`, `metadata/`, and
+`manifests/`, including published prompt data. S3 requires HTTPS; frontend asset and feed
+URLs must use `https://`. The worker can read prompt templates but cannot publish or
+promote them; run the prompt registry commands with your deployment credentials.
+
+Provider image downloads require HTTPS on `fal.media` (including subdomains),
+`replicate.delivery` (including subdomains), or `delivery.replicate.com` (including
+subdomains), as appropriate for the provider. Every redirect is checked, with at most
+five redirects and a 50 MiB download limit. The container runs as a non-root user and
+writes output to `/tmp/market-river-generator` by default. Custom output mounts must
+be writable by UID/GID 10001.
+
+Apply Terraform and rebuild/push the container to deploy these settings. Public object
+paths and JSON formats stay the same.
+
 ## Build And Push To ECR
 
 After `terraform apply`, get the ECR URL:

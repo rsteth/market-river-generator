@@ -48,6 +48,11 @@ class PublishTests(unittest.TestCase):
             self.assertEqual(latest["items"][0]["market_mood"], "flat")
             self.assertEqual(recent["items"][0]["run_id"], "run-1")
             self.assertEqual(recent["max_snapshot_groups"], 9)
+            metadata = json.loads((root / "published" / result.metadata.key).read_text(encoding="utf-8"))
+            self.assertEqual(metadata["prompt"]["positive"], "positive")
+            self.assertEqual(metadata["prompt"]["negative"], "negative")
+            self.assertEqual(latest["items"][0]["prompt"]["provider"], "provider")
+            self.assertEqual(recent["items"][0]["prompt"]["provider"], "provider")
 
     def test_s3_latest_manifest_uses_if_match_when_existing_manifest_has_etag(self) -> None:
         fake_s3 = FakeS3(existing_payload={"items": []}, etag='"abc123"')
