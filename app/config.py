@@ -208,7 +208,11 @@ def resolve_weather_conditions(cli_weather: str | None) -> list[str]:
 
 
 def resolve_run_request(cli_slot: str | None, cli_weather: str | None) -> RunRequest:
+    scheduled_at = os.getenv("SCHEDULED_AT")
+    if os.getenv("SCHEDULE_NAME") and not scheduled_at:
+        raise ValueError("SCHEDULED_AT is required for a Scheduler invocation")
     return RunRequest(
         slot=resolve_slot(cli_slot),
         weather_conditions=tuple(resolve_weather_conditions(cli_weather)),
+        scheduled_at=scheduled_at,
     )

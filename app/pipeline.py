@@ -4,18 +4,21 @@ import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Callable, Protocol
 
 from app.config import Settings
 from app.contracts import FailureMetadata, ManifestItem, MarketSnapshot, PipelineRunArtifact, RunMetadata, RunRequest
 from app.image_model import GeneratedImage, ImageProvider, get_image_provider
 from app.logging_utils import get_logger
-from app.market import fetch_market_snapshot
+from app.market import MarketDataError, fetch_market_snapshot
 from app.metadata import failure_metadata, model_metadata, pipeline_run_artifact, success_metadata
 from app.prompt_registry import load_active_prompt_template
 from app.prompts import PromptTemplate, compose_prompt
 from app.publish import PublishedObject, Publisher, StagedPublishResult
+from app.session import (
+    CLOSE_FETCH_ATTEMPTS, CLOSE_POLL_SECONDS, NEW_YORK, assess_slot, has_session_equity_bars, parse_timestamp,
+)
 from app.state import derive_visual_state
 
 
@@ -33,6 +36,9 @@ class PromptTemplateProvider(Protocol):
 
 
 class PublisherProtocol(Protocol):
+    def claim_paid_slot(self, *, session_date: str, slot: str, run_id: str) -> bool:
+        ...
+
     def publish_success(
         self,
         *,
@@ -75,6 +81,7 @@ class PipelineDependencies:
     publisher: PublisherProtocol
     now: Callable[[], str]
     new_run_id: Callable[[RunRequest, str], str]
+    sleep: Callable[[float], None] = sleep
 
 
 @dataclass(frozen=True)
@@ -95,6 +102,7 @@ class RunResult:
     variants: tuple[PublishedVariant, ...] = ()
     error_type: str | None = None
     error_message: str | None = None
+    skip_reason: str | None = None
 
 
 class YFinanceMarketDataProvider:
@@ -127,28 +135,83 @@ def default_dependencies(settings: Settings) -> PipelineDependencies:
 
 def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> RunResult:
     created_at = dependencies.now()
-    run_id = dependencies.new_run_id(request, created_at)
+    run_id = "unknown"
     slot = request.slot
     audit_artifact: PipelineRunArtifact | None = None
 
     try:
+        now = parse_timestamp(created_at)
+        scheduled_at = parse_timestamp(request.scheduled_at) if request.scheduled_at is not None else now
+        decision = assess_slot(slot, scheduled_at, now)
+        session_date = decision.session_date.isoformat()
+        run_id = dependencies.new_run_id(request, created_at)
+
+        def skip(reason: str) -> RunResult:
+            context = {"_slot": slot, "_reason": reason, "_session_date": session_date}
+            expected = reason in {"market_closed", "outside_session", "before_close_data_buffer"}
+            duplicate = reason == "paid_slot_already_claimed"
+            if expected:
+                logger.info("market slot skipped by calendar", extra=context)
+            elif duplicate:
+                logger.warning("market slot not published", extra=context)
+            else:
+                logger.error("market slot not published", extra=context)
+            return RunResult(
+                run_id=run_id, slot=slot, created_at=created_at, succeeded=expected or duplicate, skip_reason=reason,
+            )
+
+        if decision.skip_reason:
+            return skip(decision.skip_reason)
+
         logger.info(
             "starting run",
             extra={
                 "_run_id": run_id,
                 "_slot": slot,
                 "_provider": dependencies.settings.image_provider,
+                "_session_date": session_date,
                 "_weather": ",".join(request.weather_conditions),
             },
         )
 
         market_fetch_started = perf_counter()
-        market_snapshot = dependencies.market_data.fetch_snapshot()
+        if slot == "close":
+            market_snapshot = None
+            for attempt in range(CLOSE_FETCH_ATTEMPTS):
+                current = parse_timestamp(dependencies.now())
+                if current > decision.deadline:
+                    break
+                try:
+                    candidate = dependencies.market_data.fetch_snapshot()
+                except MarketDataError:
+                    candidate = None
+                current = parse_timestamp(dependencies.now())
+                if current > decision.deadline:
+                    break
+                if candidate is not None and has_session_equity_bars(candidate, decision.session_date):
+                    market_snapshot = candidate
+                    break
+                if attempt + 1 < CLOSE_FETCH_ATTEMPTS and (decision.deadline - current).total_seconds() >= CLOSE_POLL_SECONDS:
+                    dependencies.sleep(CLOSE_POLL_SECONDS)
+                else:
+                    break
+            if market_snapshot is None:
+                return skip("close_data_unavailable")
+        else:
+            market_snapshot = dependencies.market_data.fetch_snapshot()
         market_fetch_ms = _elapsed_ms(market_fetch_started)
 
         prompt_load_started = perf_counter()
         prompt_template = dependencies.prompt_templates.load_template()
         prompt_load_ms = _elapsed_ms(prompt_load_started)
+
+        # Do not start late if data or template resolution used up the slot window.
+        after_fetch = assess_slot(slot, scheduled_at, parse_timestamp(dependencies.now()))
+        if after_fetch.skip_reason:
+            return skip(after_fetch.skip_reason)
+        if dependencies.image_provider.name in {"replicate", "fal"}:
+            if not dependencies.publisher.claim_paid_slot(session_date=session_date, slot=slot, run_id=run_id):
+                return skip("paid_slot_already_claimed")
 
         model = model_metadata(dependencies.settings, dependencies.image_provider.name)
         audit_artifact = pipeline_run_artifact(
@@ -189,6 +252,7 @@ def run_pipeline(request: RunRequest, dependencies: PipelineDependencies) -> Run
                 visual_state=visual_state,
                 prompt=prompt,
                 model=model,
+                session_date=session_date,
             )
             publish_started = perf_counter()
             staged = _stage_success(dependencies.publisher, metadata, image)
@@ -290,7 +354,7 @@ def _variant_run_id(base_run_id: str, weather_condition: str, weather_conditions
 
 
 def deterministic_run_id(request: RunRequest, created_at: str) -> str:
-    date = created_at[:10]
+    date = parse_timestamp(request.scheduled_at or created_at).astimezone(NEW_YORK).date().isoformat()
     weather = ",".join(request.weather_conditions)
     return hashlib.sha256(f"{date}:{request.slot}:{weather}".encode("utf-8")).hexdigest()[:12]
 

@@ -23,7 +23,7 @@ def metadata_item(payload: dict, key: str, base_url: str) -> dict:
     image_key = outputs["image_s3_key"]
     return ManifestItem.from_mapping({
         **payload,
-        "date": payload["created_at"][:10],
+        "date": payload.get("session_date") or payload["created_at"][:10],
         "image_url": f"{base_url}/{image_key}",
         "metadata_url": f"{base_url}/{key}",
         "market_mood": payload["derived_state"]["market_mood"],

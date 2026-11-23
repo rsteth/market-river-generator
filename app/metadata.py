@@ -27,10 +27,12 @@ def success_metadata(
     visual_state: VisualState,
     prompt: PromptResult,
     model: ModelMetadata,
+    session_date: str | None = None,
 ) -> RunMetadata:
     rendered_prompt = provider_prompt(prompt)
     return RunMetadata(
-        id=f"{created_at[:10]}-{slot}-{run_id}",
+        id=f"{session_date or created_at[:10]}-{slot}-{run_id}",
+        session_date=session_date,
         run_id=run_id,
         slot=slot,
         weather=visual_state.weather.condition,

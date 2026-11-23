@@ -27,7 +27,8 @@ resource "aws_scheduler_schedule" "market_slots" {
       }
     }
 
-    input = jsonencode({
+    # jsonencode escapes angle brackets; Scheduler must see a literal context token.
+    input = replace(jsonencode({
       containerOverrides = [
         {
           name = local.container_name
@@ -47,10 +48,14 @@ resource "aws_scheduler_schedule" "market_slots" {
             {
               name  = "SCHEDULE_SLOT"
               value = each.key
+            },
+            {
+              name  = "SCHEDULED_AT"
+              value = "__MARKET_RIVER_SCHEDULED_AT__"
             }
           ]
         }
       ]
-    })
+    }), "__MARKET_RIVER_SCHEDULED_AT__", "<aws.scheduler.scheduled-time>")
   }
 }

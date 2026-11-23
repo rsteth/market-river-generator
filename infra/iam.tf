@@ -71,6 +71,18 @@ data "aws_iam_policy_document" "task_s3" {
   }
 
   statement {
+    sid       = "ClaimPaidGeneration"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.assets.arn}/generation-claims/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:if-none-match"
+      values   = ["*"]
+    }
+  }
+
+  statement {
     sid       = "ReadPromptTemplates"
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.assets.arn}/prompts/*"]
