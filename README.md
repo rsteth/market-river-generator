@@ -358,7 +358,11 @@ The scheduled ECS jobs run Monday through Friday only in the `America/Los_Angele
 - `midday`: 10:15 AM
 - `close`: 1:20 PM
 
-There is no weekend schedule. The app does not currently skip weekday market holidays unless the schedule is disabled or adjusted.
+There is no weekend schedule. On weekdays Scheduler still starts Fargate at the three times above; the worker uses the pinned NYSE core-hours calendar before any market fetch, image generation or publication. Closed days skip all slots. Open and midday must be inside the intended and actual session. Friday after Thanksgiving keeps open and the regular post-close slot, but skips midday when it falls after the early close.
+
+The intended timestamp comes from the Scheduler `SCHEDULED_AT` context override; it is required on scheduled runs. Session dates use America/New_York. Live manual runs use their start time and obey the calendar too. Scheduled work may start up to 20 minutes late; close must be at least 10 minutes after the exchange close and requires valid same-session daily bars from **both** SPY and QQQ. It makes up to three data-only attempts, 30 seconds apart when the window allows. A daily bar's date is not independent proof of exchange-certified closing values.
+
+Before a paid provider call, the worker atomically claims the exchange date and slot with a private S3 create-only object in `generation-claims/`, across weather selections and task attempts. Paid generation requires S3. An existing claim prevents a second paid submit, including after an ambiguous provider failure. This deliberately favors preventing double spend over automatic recovery for interrupted slots; an operator must check provider output and publication history before recovering one. Keep claims private. The worker can list object names under its existing bucket permission, but cannot read or delete claim objects. Expected calendar skips emit the separate `SlotCalendarSkip-<slot>` metric and do not count as completed publishes. The existing missing-success alarm can still reflect a long intentional gap; inspect calendar skip logs separately from run failures.
 
 ## Swapping Data Or Image Providers
 

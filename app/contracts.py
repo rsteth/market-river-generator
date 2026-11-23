@@ -11,6 +11,7 @@ JsonDict = dict[str, Any]
 class RunRequest:
     slot: str
     weather_conditions: tuple[str, ...]
+    scheduled_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -234,6 +235,7 @@ class RunMetadata:
     prompt: PromptMetadata
     model: ModelMetadata
     outputs: JsonDict = field(default_factory=dict)
+    session_date: str | None = None
 
     def with_outputs(self, **outputs: Any) -> "RunMetadata":
         return replace(self, outputs={**self.outputs, **outputs})
@@ -245,6 +247,7 @@ class RunMetadata:
             "slot": self.slot,
             "weather": self.weather,
             "created_at": self.created_at,
+            "session_date": self.session_date or self.created_at[:10],
             "market_snapshot": self.market_snapshot.to_dict(),
             "derived_state": self.derived_state.to_dict(),
             "caption": self.caption,
@@ -388,7 +391,7 @@ class ManifestItem:
             run_id=metadata.run_id,
             slot=metadata.slot,
             weather=metadata.weather,
-            date=metadata.created_at[:10],
+            date=metadata.session_date or metadata.created_at[:10],
             created_at=metadata.created_at,
             image_url=image_url,
             metadata_url=metadata_url,

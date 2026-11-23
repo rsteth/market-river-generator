@@ -43,7 +43,7 @@ class PipelineTests(unittest.TestCase):
                 prompt_templates=FakePromptTemplates(),
                 image_provider=image_provider,
                 publisher=publisher,
-                now=lambda: "2026-01-02T10:00:00Z",
+                now=lambda: "2026-01-02T14:45:00Z",
                 new_run_id=lambda request, created_at: "base123",
             )
             image_provider.events = publisher.events
@@ -69,7 +69,7 @@ class PipelineTests(unittest.TestCase):
                 prompt_templates=FakePromptTemplates(),
                 image_provider=FakeImageProvider(root),
                 publisher=publisher,
-                now=lambda: "2026-01-02T10:00:00Z",
+                now=lambda: "2026-01-02T18:15:00Z",
                 new_run_id=lambda request, created_at: "base123",
             )
 

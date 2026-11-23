@@ -24,6 +24,20 @@ resource "aws_cloudwatch_log_metric_filter" "slot_successes" {
   }
 }
 
+resource "aws_cloudwatch_log_metric_filter" "slot_calendar_skips" {
+  for_each = local.schedules
+
+  name           = "${var.app_name}-${each.key}-calendar-skips"
+  log_group_name = aws_cloudwatch_log_group.app.name
+  pattern        = "{ $.message = \"market slot skipped by calendar\" && $.slot = \"${each.key}\" }"
+
+  metric_transformation {
+    name      = "SlotCalendarSkip-${each.key}"
+    namespace = var.app_name
+    value     = "1"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "run_failures" {
   count = var.enable_cloudwatch_alarms ? 1 : 0
 

@@ -77,8 +77,7 @@ class Publisher:
         image_format: str | None,
     ) -> StagedPublishResult:
         slot = metadata.slot
-        created_at = metadata.created_at
-        date_path = _date_path(created_at)
+        date_path = _date_path(metadata.session_date or metadata.created_at)
         run_id = metadata.run_id
 
         image_obj = None
@@ -129,6 +128,28 @@ class Publisher:
         date_path = _date_path(artifact.created_at)
         key = f"pipeline-runs/{date_path}/{artifact.slot}-{artifact.run_id}.json"
         return self.upload_json(artifact.to_dict(), key)
+
+    def claim_paid_slot(self, *, session_date: str, slot: str, run_id: str) -> bool:
+        key = f"generation-claims/{session_date}/{slot}.json"
+        body = json.dumps({"run_id": run_id}).encode()
+        if self._s3:
+            try:
+                self._s3.put_object(
+                    Bucket=self.settings.s3_bucket,
+                    Key=key,
+                    Body=body,
+                    ContentType="application/json",
+                    IfNoneMatch="*",
+                )
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") in {"PreconditionFailed", "412"}:
+                    return False
+                # A conflict, denied access, or an ambiguous transport outcome must not authorize a paid call.
+                raise
+        else:
+            # A local worker has no durable cross-host lock and must not dispatch paid scheduled work.
+            raise RuntimeError("paid generation requires S3 for a durable slot claim")
+        return True
 
     def upload_file(self, source: Path, key: str, content_type: str) -> PublishedObject:
         if self._s3:

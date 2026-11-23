@@ -116,24 +116,31 @@ class FalImageProvider:
         market_mood: str,
         volatility_mood: str,
     ) -> GeneratedImage:
-        import fal_client
+        import os
+
+        import requests
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        result = retry_call(
-            "fal image generation",
-            lambda: fal_client.subscribe(
-                self.model,
-                arguments={
-                    "prompt": _fal_prompt(prompt_result),
-                    "image_size": self.image_size,
-                    "num_inference_steps": self.num_inference_steps,
-                    "num_images": 1,
-                    "enable_safety_checker": self.enable_safety_checker,
-                    "output_format": self.output_format,
-                    "acceleration": self.acceleration,
-                },
-            ),
+        # fal-client retries ambiguous POST failures. A single synchronous submit
+        # is deliberately not followed or retried; only output downloads retry.
+        response = requests.post(
+            f"https://fal.run/{self.model}",
+            headers={"Authorization": f"Key {os.environ['FAL_KEY']}"},
+            json={
+                "prompt": _fal_prompt(prompt_result),
+                "image_size": self.image_size,
+                "num_inference_steps": self.num_inference_steps,
+                "num_images": 1,
+                "enable_safety_checker": self.enable_safety_checker,
+                "output_format": self.output_format,
+                "acceleration": self.acceleration,
+            },
+            timeout=(5, 120),
+            allow_redirects=False,
         )
+        if not 200 <= response.status_code < 300:
+            raise RuntimeError(f"fal image generation returned HTTP {response.status_code}")
+        result = response.json()
         image = _first_fal_image(result)
         url = image["url"]
         content_type = image.get("content_type") or _content_type_for_format(self.output_format)
@@ -178,7 +185,8 @@ class ReplicateImageProvider:
         if self.seed is not None:
             request_input["seed"] = self.seed
 
-        result = retry_call("replicate image generation", lambda: replicate.run(self.model, input=request_input))
+        # A prediction POST may have been accepted even if its response was lost.
+        result = replicate.run(self.model, input=request_input)
         content_type = _content_type_for_format(self.output_format)
         image_format = _format_for_content_type(content_type, self.output_format)
         path = output_dir / f"{slot}-{run_id}.{image_format}"
