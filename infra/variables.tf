@@ -201,7 +201,7 @@ variable "log_retention_days" {
 }
 
 variable "enable_cloudwatch_alarms" {
-  description = "Create CloudWatch alarms for failed runs and missing per-slot success logs."
+  description = "Create CloudWatch alarms and the read-only daily publication watchdog."
   type        = bool
   default     = true
 }
@@ -219,7 +219,7 @@ variable "ok_actions" {
 }
 
 variable "missing_slot_alarm_period_seconds" {
-  description = "Lookback window for per-slot missing-success alarms. Defaults to 72 hours to avoid weekend-only noise."
+  description = "Deprecated; retained for tfvars compatibility. Publication alarms now use the daily per-occurrence watchdog."
   type        = number
   default     = 259200
 }

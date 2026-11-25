@@ -14,6 +14,7 @@ def load_runtime_log_context() -> dict[str, Any]:
         "aws_execution_env": os.getenv("AWS_EXECUTION_ENV"),
         "schedule_name": os.getenv("SCHEDULE_NAME"),
         "schedule_slot": os.getenv("SCHEDULE_SLOT"),
+        "scheduled_at": os.getenv("SCHEDULED_AT"),
     }
     context.update(_task_input_context())
     context.update(_ecs_metadata_context())
